@@ -7,8 +7,8 @@ Find restaurants, cafes, and bars in Manhattan by what you actually want ("happy
 1. **Ingest** (`server/scripts/ingest.js`) sweeps a grid over Manhattan with the Google Places API and saves venues, including opening hours, to a local SQLite database. When a search area returns the max 20 results, it splits into smaller circles so dense blocks don't get missed.
 2. **Tag** (`server/scripts/tag.js`) sends each venue's reviews to Claude and saves vibe tags (date night, happy hour, work friendly, etc.) and praised dishes.
 3. **Search** runs entirely against the local database, so filtering costs nothing per query. A free-text box ("Ask") sends what you typed to Claude, which turns it into structured filters — category, vibe, price, and an "open until" day/time check against the venue's real hours. The same filters (plus that free-text box) are also available when creating or editing a plan.
-4. **Accounts and friends**: sign up, add friends by email, accept/decline requests.
-5. **Plans**: a host describes what they're looking for and invites friends. Each invitee opens the plan and shares their location (browser geolocation, or a typed address as a fallback) — shown live on a map. Once at least two people have shared, the host can find spots, and re-share their location later if plans change.
+4. **Accounts and friends**: sign up, add friends by email or by sharing your personal invite link (`/add-friend/:token`, in the Friends tab) — either way it lands as a normal pending request the other person accepts.
+5. **Plans**: a host describes what they're looking for and invites friends, or shares the plan's invite link (`/join/:token`). Opening that link joins instantly — no account needed, just a name, which creates a lightweight guest login (upgradeable to a real account later) so every plan feature already works for them. Each invitee shares their location (browser geolocation, or a typed address as a fallback) — shown live on a map. Once at least two people have shared, the host can find spots, and re-share their location later if plans change.
 6. **Meet in the middle** takes everyone's location, pulls the best matching venues near the geographic center, then gets real travel times from each person to each venue by both transit and walking (Google Routes API), taking whichever is faster per person — someone six blocks away walks, someone across town takes the train. Venues are ranked by the longest trip anyone has to make, with a penalty when trip times are lopsided. Clicking "See routes" on a result fetches the actual step-by-step directions per person (which line, how many stops, walk segments) on demand.
 7. **Descriptions** are grounded in each venue's real Google reviews and whatever you asked for — a plan for "late happy hour" surfaces "$5 cocktails until 8pm" if a review says so, not a generic category line (`server/src/services/describe.js`).
 
@@ -50,6 +50,30 @@ Venues ingested before hours were tracked have `hours = NULL`, which makes them 
 npm run backfill-hours
 ```
 Then re-run `npm run tag -- --retag` if you want the `happy_hour` vibe (added alongside hours support) applied to existing venues.
+
+## Deploying
+
+The frontend (static, `client/`) and API (stateful, `server/` + SQLite) need different hosts — a serverless platform like plain Vercel can't run the API, since it needs a persistent disk and a long-running process. This deploys the two separately: **Vercel for the frontend, Railway (or Render) for the API.**
+
+Push this repo to GitHub first (`git remote add origin <your-repo-url>`, `git push -u origin main`), then:
+
+**1. API on Railway** (or Render — same idea, different dashboard):
+- New Project → Deploy from GitHub repo → set **Root Directory** to `server`
+- Add a **volume** (Railway calls it a Volume, Render calls it a Disk) mounted at e.g. `/data` — without this, the SQLite database is wiped on every redeploy
+- Environment variables: `GOOGLE_MAPS_API_KEY`, `ANTHROPIC_API_KEY`, `DB_PATH=/data/venues.db` — leave `CLIENT_ORIGIN` for step 3
+- Deploy, then copy the API's public URL (something like `https://midpoint-production.up.railway.app`)
+
+**2. Frontend on Vercel:**
+- New Project → import the same GitHub repo → set **Root Directory** to `client`
+- Environment variable: `VITE_API_URL` = the Railway URL from step 1
+- Deploy, then copy the frontend's URL (something like `https://midpoint.vercel.app`)
+
+**3. Connect them:**
+- Back in Railway, set `CLIENT_ORIGIN` = the Vercel URL from step 2, then redeploy the API (env var changes need a restart to take effect)
+
+Without step 3, login/signup will silently fail — the cookie gets rejected because the API doesn't yet know to trust the frontend's origin.
+
+**About the database on first deploy**: the volume starts empty — no venues at all until people start using it. That's expected: `services/liveIngest.js` fetches real venues from Google Places the moment someone searches near an area that isn't covered yet (same on-demand behavior already described above), so the first plan anyone makes in a new neighborhood takes an extra ~15-20 seconds while it fetches and tags real data, then every plan after that in the same area is instant. If you'd rather start with your local database's existing coverage, copy `server/data/venues.db` onto the volume before the first deploy (exact steps depend on the platform — Railway's CLI supports this via `railway run`).
 
 ## Layout
 
