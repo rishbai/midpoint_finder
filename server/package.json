@@ -1,0 +1,21 @@
+{
+  "name": "midpoint-server",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch --env-file=.env src/index.js",
+    "start": "node src/index.js",
+    "ingest": "node --env-file=.env scripts/ingest.js",
+    "tag": "node --env-file=.env scripts/tag.js",
+    "backfill-hours": "node --env-file=.env scripts/backfill-hours.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.126.0",
+    "bcryptjs": "^3.0.3",
+    "better-sqlite3": "^13.0.3",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.7.0"
+  }
+}

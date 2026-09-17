@@ -1,0 +1,72 @@
+// Reads Google's regularOpeningHours JSON (stored verbatim on venues.hours)
+// and answers "is this place open at this moment in the week?"
+//
+// periods look like: [{ open: {day,hour,minute}, close: {day,hour,minute} }, ...]
+// day is 0=Sunday..6=Saturday. A period with no `close` runs 24 hours (open all week
+// if it's the only period). A close on an earlier day/hour than open means it
+// crosses midnight (e.g. open Fri 22:00, close Sat 02:00).
+
+const DAY_MINUTES = 24 * 60;
+const WEEK_MINUTES = 7 * DAY_MINUTES;
+
+function toWeekMinutes(point) {
+  return point.day * DAY_MINUTES + point.hour * 60 + (point.minute || 0);
+}
+
+// target is { day, minutes } in the same 0=Sunday week-minute space.
+export function isOpenAt(hoursJson, target) {
+  const hours = typeof hoursJson === 'string' ? JSON.parse(hoursJson) : hoursJson;
+  const periods = hours?.periods;
+  if (!periods || !periods.length) return null; // unknown hours
+
+  const t = target.day * DAY_MINUTES + target.minutes;
+
+  for (const period of periods) {
+    if (!period.open) continue;
+    const start = toWeekMinutes(period.open);
+    if (!period.close) return true; // runs continuously (24-hour place)
+    let end = toWeekMinutes(period.close);
+    if (end <= start) end += WEEK_MINUTES; // crosses midnight and/or the week boundary
+
+    if (t >= start && t < end) return true;
+    if (t + WEEK_MINUTES >= start && t + WEEK_MINUTES < end) return true; // wraparound check
+  }
+  return false;
+}
+
+// "7pm", "19:00", "7:30pm" -> minutes since midnight, or null if unparseable.
+export function parseTimeOfDay(text) {
+  const m = String(text).trim().match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/i);
+  if (!m) return null;
+  let hour = Number(m[1]);
+  const minute = Number(m[2] || 0);
+  const meridiem = m[3]?.toLowerCase();
+  if (meridiem === 'pm' && hour < 12) hour += 12;
+  if (meridiem === 'am' && hour === 12) hour = 0;
+  if (hour > 23 || minute > 59) return null;
+  return hour * 60 + minute;
+}
+
+export const DAY_NAMES = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+
+export function dayIndex(name) {
+  const i = DAY_NAMES.indexOf(String(name).toLowerCase());
+  return i === -1 ? null : i;
+}
+
+// Venues are all in Manhattan, so hours checks use NY wall-clock time
+// regardless of where the server (or the person searching) actually is.
+const NY_PARTS = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'America/New_York',
+  weekday: 'short',
+  hour: 'numeric',
+  minute: 'numeric',
+  hour12: false,
+});
+
+export function nyDayAndMinutes(date = new Date()) {
+  const parts = Object.fromEntries(NY_PARTS.formatToParts(date).map((p) => [p.type, p.value]));
+  const day = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(parts.weekday);
+  const hour = Number(parts.hour) % 24;
+  return { day, minutes: hour * 60 + Number(parts.minute) };
+}

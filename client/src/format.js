@@ -1,0 +1,39 @@
+export const label = (s) => (s ? s.replaceAll('_', ' ') : '');
+
+export const price = (level) => (level ? '$'.repeat(level) : '');
+
+// Used to label each person in a plan/meetup (A, B, C...) — paired with the
+// .avatar[data-i] color rotation in styles.css.
+export const personLetter = (i) => String.fromCharCode(65 + i);
+
+// Google's transit vehicle types, collapsed to plain words for display.
+const VEHICLES = {
+  SUBWAY: 'subway',
+  METRO_RAIL: 'subway',
+  BUS: 'bus',
+  RAIL: 'train',
+  HEAVY_RAIL: 'train',
+  COMMUTER_TRAIN: 'train',
+  HIGH_SPEED_TRAIN: 'train',
+  LONG_DISTANCE_TRAIN: 'train',
+  TRAM: 'tram',
+  FERRY: 'ferry',
+  MONORAIL: 'monorail',
+};
+export const vehicleLabel = (vehicle) => VEHICLES[vehicle] || 'transit';
+
+export const modeIcon = (mode) => (mode === 'WALK' ? '🚶' : mode === 'TRANSIT' ? '🚇' : '');
+
+// One-line human summary of an active filters object, e.g. "bar · $$ · 4.5+
+// · happy hour · open now" — used wherever we show what's currently applied.
+export function summarizeFilters(filters) {
+  return [
+    filters.category,
+    filters.cuisine,
+    filters.minPrice || filters.maxPrice ? price(filters.maxPrice || filters.minPrice) : null,
+    filters.minRating ? `${filters.minRating}+ rating` : null,
+    filters.vibes?.length ? filters.vibes.map(label).join(', ') : null,
+    filters.dish,
+    filters.openNow ? 'open now' : filters.openMinutes != null ? 'open at the right time' : null,
+  ].filter(Boolean).join(' · ');
+}

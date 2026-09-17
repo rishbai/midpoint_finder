@@ -1,0 +1,314 @@
+:root {
+  --black: #14151a;
+  --white: #fff;
+  --paper: #f6f6f8;
+  --rule: #e8e8eb;
+  --muted: #8b8d98;
+  --accent: #ff5a5f;
+  --danger: #e5484d;
+  --focus: #4d96ff;
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Helvetica, Arial, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: var(--font);
+  font-size: 16px;
+  line-height: 1.45;
+  color: var(--black);
+  background: var(--white);
+}
+
+h2 { font-size: 1.3rem; letter-spacing: -0.01em; margin: 0 0 0.75rem; }
+h3 { margin: 0; }
+
+button, input, select { font: inherit; color: inherit; }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+/* Top nav */
+.sign {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 0.85rem 1.5rem;
+  background: var(--white);
+  border-bottom: 1px solid var(--rule);
+}
+.sign h1 { margin: 0; font-size: 1.35rem; font-weight: 800; letter-spacing: -0.02em; }
+
+.tabs { display: flex; gap: 0.15rem; background: var(--paper); padding: 0.25rem; border-radius: 999px; }
+.tabs button {
+  background: none;
+  border: 0;
+  border-radius: 999px;
+  padding: 0.4rem 0.95rem;
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: var(--muted);
+  cursor: pointer;
+}
+.tabs button[aria-pressed='true'] { background: var(--black); color: var(--white); }
+
+.account { display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; color: var(--muted); }
+.account .link { color: var(--black); }
+.upgrade-form { display: flex; align-items: center; gap: 0.4rem; }
+.upgrade-form input { width: 8rem; padding: 0.3rem 0.5rem; font-size: 0.8125rem; }
+
+.layout { max-width: 44rem; margin: 0 auto; }
+main.full { padding: 1.25rem 1.5rem 4rem; min-width: 0; }
+
+.muted { color: var(--muted); }
+.small { font-size: 0.8125rem; }
+
+/* Forms, generally */
+select, input[type='text'], input[type='email'], input[type='password'], input[type='datetime-local'] {
+  width: 100%;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  background: var(--white);
+  font-weight: 500;
+}
+
+.row { display: flex; gap: 0.75rem; align-items: flex-end; flex-wrap: wrap; margin-bottom: 1rem; }
+.row label { flex: 1; min-width: 12rem; display: grid; gap: 0.35rem; font-size: 0.875rem; font-weight: 700; }
+
+fieldset { border: 0; margin: 0; padding: 0; }
+legend { font-size: 0.875rem; font-weight: 700; margin-bottom: 0.4rem; padding: 0; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.chip {
+  padding: 0.3rem 0.75rem;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: var(--white);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.chip[aria-pressed='true'] { background: var(--black); border-color: var(--black); color: var(--white); }
+
+.link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--black);
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+.link.danger { color: var(--danger); }
+
+.primary {
+  padding: 0.6rem 1.2rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--black);
+  color: var(--white);
+  font-weight: 700;
+  cursor: pointer;
+}
+.primary:disabled { background: #c7c7cc; cursor: not-allowed; }
+
+.count { margin: 0 0 0.75rem; color: var(--muted); font-size: 0.875rem; }
+.notice { padding: 0.75rem 1rem; background: var(--paper); border-radius: 10px; font-size: 0.9rem; }
+
+.plain-list { list-style: none; margin: 0 0 1.5rem; padding: 0; }
+.plain-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.7rem 0;
+  border-bottom: 1px solid var(--rule);
+}
+.plain-list .link { margin-left: 0.75rem; }
+
+/* Ask box (free-text search) */
+.ask { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+.ask input { flex: 1; border-radius: 999px; padding: 0.65rem 1.1rem; }
+
+/* Typical filters bar */
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem 1.5rem;
+  align-items: flex-end;
+  padding: 1rem;
+  margin-bottom: 1.25rem;
+  background: var(--paper);
+  border-radius: 14px;
+}
+.filter-group { display: grid; gap: 0.4rem; }
+.filter-group.grow { flex: 1; min-width: 12rem; }
+.filter-label {
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+.filter-group select { min-width: 10rem; }
+.pills { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.pill {
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid var(--rule);
+  background: var(--white);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.pill[aria-pressed='true'] { background: var(--black); border-color: var(--black); color: var(--white); }
+
+/* Results: venue rows with a colored score badge (Beli-style) */
+.results { display: grid; }
+.venue { display: flex; gap: 0.9rem; padding: 1rem 0; border-top: 1px solid var(--rule); }
+.venue:first-child { border-top: 0; padding-top: 0; }
+.venue-body { flex: 1; min-width: 0; }
+.venue-head { display: flex; align-items: baseline; gap: 0.4rem; flex-wrap: wrap; }
+.venue h3 { font-size: 1.05rem; font-weight: 700; letter-spacing: -0.01em; }
+.venue p { margin: 0.15rem 0 0; max-width: 60ch; }
+.details { text-transform: capitalize; color: var(--muted); font-size: 0.875rem; }
+.address, .tags { color: var(--muted); font-size: 0.85rem; }
+.dishes { font-size: 0.85rem; }
+
+.score {
+  flex: none;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 50%;
+  display: inline-grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 0.95rem;
+}
+.score-great { background: #0f8a5f; color: var(--white); }
+.score-good { background: #3fae54; color: var(--white); }
+.score-average { background: #f2c94c; color: #1a1a1a; }
+.score-low { background: var(--danger); color: var(--white); }
+
+/* Colored initials, standing in for a person across a plan */
+.avatar {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 50%;
+  font-weight: 700;
+  font-size: 0.8rem;
+  color: var(--white);
+  background: var(--muted);
+  vertical-align: middle;
+  margin-right: 0.35rem;
+}
+.avatar[data-i='0'] { background: #ff6b6b; }
+.avatar[data-i='1'] { background: #4d96ff; }
+.avatar[data-i='2'] { background: #2fb380; }
+.avatar[data-i='3'] { background: #e8a400; color: #1a1a1a; }
+.avatar[data-i='4'] { background: #b983ff; }
+.avatar[data-i='5'] { background: #ff9f45; }
+
+.trips { display: flex; flex-wrap: wrap; gap: 0.35rem 1rem; list-style: none; padding: 0; margin: 0.6rem 0 0; }
+.trips li { display: flex; align-items: center; gap: 0.3rem; }
+
+/* Per-venue, per-person directions (click "See routes") */
+.route-toggle { margin-top: 0.5rem; }
+.route-detail { display: grid; gap: 0.9rem; margin-top: 0.65rem; padding: 0.9rem; background: var(--paper); border-radius: 12px; }
+.route-person-head { display: flex; align-items: center; margin: 0; }
+.route-steps { list-style: none; margin: 0.4rem 0 0; padding-left: 1.9rem; display: grid; gap: 0.25rem; font-size: 0.85rem; color: var(--muted); }
+
+/* Description grounded in this venue's actual reviews (server/services/describe.js) */
+.highlight { color: var(--black); font-weight: 600; }
+
+/* Plan map (Leaflet + OpenStreetMap tiles) */
+.plan-map { height: 16rem; border-radius: 14px; overflow: hidden; margin: 1rem 0; border: 1px solid var(--rule); z-index: 0; }
+.map-pin span {
+  display: block;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--white);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25);
+}
+.map-pin-venue span {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  background: var(--black);
+  color: var(--white);
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  border: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+}
+.map-pin-stop span {
+  display: block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--white);
+  border: 3px solid;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.2);
+}
+.route-map { height: 18rem; border-radius: 14px; overflow: hidden; margin-bottom: 0.75rem; border: 1px solid var(--rule); z-index: 0; }
+.trips li { display: flex; align-items: center; font-weight: 700; font-size: 0.875rem; }
+
+/* Auth */
+.auth-panel { max-width: 24rem; display: grid; gap: 1rem; }
+.auth-panel form { display: grid; gap: 0.75rem; }
+.auth-panel label { display: grid; gap: 0.35rem; font-size: 0.875rem; font-weight: 700; }
+
+/* Invite link (share a plan without needing accounts/friendships) */
+.invite-link { margin: 1rem 0; }
+.invite-link label { display: grid; gap: 0.35rem; font-size: 0.8125rem; font-weight: 700; color: var(--muted); }
+.invite-link-row { display: flex; gap: 0.5rem; }
+.invite-link-row input { flex: 1; font-size: 0.875rem; color: var(--black); }
+
+/* Public join screen (opened from a plan's invite link, no app chrome) */
+.join-screen { max-width: 24rem; margin: 3rem auto; padding: 0 1.5rem; display: grid; gap: 0.75rem; }
+.join-screen h1 { font-size: 1.35rem; font-weight: 800; letter-spacing: -0.02em; margin: 0; }
+.join-screen form { display: grid; gap: 1rem; margin-top: 0.5rem; }
+.join-screen label { display: grid; gap: 0.35rem; font-size: 0.875rem; font-weight: 700; }
+
+/* Plans list */
+.plan-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+  width: 100%;
+  text-align: left;
+  padding: 0.8rem 0.9rem;
+  margin: 0 -0.9rem;
+  border: 0;
+  background: none;
+  border-radius: 10px;
+  cursor: pointer;
+}
+.plan-row:hover { background: var(--paper); }
+
+/* Plan detail */
+.plan-title-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.plan-actions { display: flex; gap: 1rem; flex: none; }
+
+.share-location { display: grid; gap: 0.65rem; margin: 1rem 0; padding: 1rem; background: var(--paper); border-radius: 12px; }
+.share-location form { display: flex; align-items: flex-end; gap: 0.5rem; }
+.share-location label { flex: 1; font-size: 0.875rem; font-weight: 600; display: grid; gap: 0.3rem; }
+
+.results-header { display: flex; justify-content: space-between; align-items: center; margin: 1.25rem 0 0.5rem; }
+
+.plan-form { display: grid; gap: 1rem; max-width: 32rem; }
+.plan-form label { display: grid; gap: 0.35rem; font-size: 0.875rem; font-weight: 700; }
+
+.people-actions { display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; margin-top: 0.5rem; }
