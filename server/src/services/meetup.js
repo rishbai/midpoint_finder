@@ -23,20 +23,11 @@ export async function findMeetup({ addresses, filters, departureTime }) {
   return { people, center, results, note };
 }
 
-// Shared by the anonymous "Meet up" flow (addresses geocoded above) and the
-// account-based Plans flow (people already have lat/lng from shared location).
-// `people` is [{ lat, lng, ... }], order preserved in the returned minutes arrays.
-export async function rankVenuesForPeople(people, filters, departureTime) {
-  const center = {
-    lat: people.reduce((s, p) => s + p.lat, 0) / people.length,
-    lng: people.reduce((s, p) => s + p.lng, 0) / people.length,
-  };
-
-  // Best matching venues near the geographic center. If even the smallest
-  // radius comes up sparse, the local database probably just hasn't been
-  // ingested for this area yet — fetch it live from Google Places rather
-  // than settling for whatever the widest radius happens to reach from
-  // some other, already-covered neighborhood (which is misleading, not fair).
+// Finds candidates near `center` matching `filters`, gets real transit+walk
+// times to a shortlist, and ranks by fairness. Returns [] results (not an
+// error) when nothing pans out, so the caller can decide whether to relax
+// and retry rather than just showing a dead end.
+async function searchAndRank(filters, center, people, departureTime) {
   let candidates = searchVenues({ ...filters, lat: center.lat, lng: center.lng, radius: SEARCH_RADII[0], sort: 'best', limit: 200 });
   if (candidates.length < MIN_CANDIDATES) {
     await ensureCoverage(center).catch((err) => console.warn('Live coverage sweep failed:', err.message));
@@ -45,14 +36,7 @@ export async function rankVenuesForPeople(people, filters, departureTime) {
     candidates = searchVenues({ ...filters, lat: center.lat, lng: center.lng, radius, sort: 'best', limit: 200 });
     if (candidates.length >= MIN_CANDIDATES) break;
   }
-  if (!candidates.length) return { center, results: [] };
-
-  // Even after a live sweep, the honest truth if the closest match is still
-  // far: say so, rather than presenting a distant venue as a good "middle."
-  const nearest = Math.min(...candidates.map((c) => c.distance ?? Infinity));
-  const note = nearest > 2000
-    ? `The closest match is ${(nearest / 1000).toFixed(1)}km from the middle — this area may be thin on options.`
-    : null;
+  if (!candidates.length) return { candidates, results: [] };
 
   // Real travel times from each person to the shortlist — transit (which
   // Google already routes over subway, bus, and rail, whichever combination
@@ -86,6 +70,46 @@ export async function rankVenuesForPeople(people, filters, departureTime) {
     })
     .filter(Boolean)
     .sort((a, b) => a.score - b.score);
+
+  return { candidates, results };
+}
+
+// Shared by the anonymous "Meet up" flow (addresses geocoded above) and the
+// account-based Plans flow (people already have lat/lng from shared location).
+// `people` is [{ lat, lng, ... }], order preserved in the returned minutes arrays.
+export async function rankVenuesForPeople(people, filters, departureTime) {
+  const center = {
+    lat: people.reduce((s, p) => s + p.lat, 0) / people.length,
+    lng: people.reduce((s, p) => s + p.lng, 0) / people.length,
+  };
+
+  let { candidates, results } = await searchAndRank(filters, center, people, departureTime);
+  let note = null;
+
+  // A narrow ask (especially a specific vibe — it depends on Claude having
+  // found that exact thing mentioned in reviews, so it's easy to under-match)
+  // can rule out every real, nearby option. Don't just show a dead end when
+  // that happens: drop the narrowest parts of the filter and try again,
+  // rather than pretending nothing at all fits the general idea.
+  if (!results.length && (filters.vibes?.length || filters.dish)) {
+    const relaxed = { ...filters, vibes: [], dish: undefined };
+    const retry = await searchAndRank(relaxed, center, people, departureTime);
+    if (retry.results.length) {
+      ({ candidates, results } = retry);
+      const dropped = [filters.vibes?.length ? 'vibe' : null, filters.dish ? 'dish' : null].filter(Boolean).join('/');
+      note = `Nothing matched every filter exactly, so the ${dropped} filter was dropped — these still match everything else.`;
+    }
+  }
+
+  if (!results.length) return { center, results: [] };
+
+  // Even after a live sweep (and a relaxed retry), the honest truth if the
+  // closest match is still far: say so, rather than presenting a distant
+  // venue as a good "middle."
+  const nearest = Math.min(...candidates.map((c) => c.distance ?? Infinity));
+  if (!note && nearest > 2000) {
+    note = `The closest match is ${(nearest / 1000).toFixed(1)}km from the middle — this area may be thin on options.`;
+  }
 
   return { center, results, note };
 }
