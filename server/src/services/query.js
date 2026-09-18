@@ -35,7 +35,7 @@ Rules:
 - openDay and openMinutes always travel together: never set one without the other.
 - If they give a time ("past 7pm", "after 9", "still open at 11") without naming a day, use today: openDay ${today.day} (${DAY_NAMES[today.day]}), openMinutes = that time converted as above.
 - If they name a day ("Friday night"), set openDay to that weekday's index (0=Sunday..6=Saturday) and, if no exact time is given, use 21:00 -> openMinutes 1260 for "night".
-- Price words: "cheap"/"budget" -> maxPrice 2. "upscale"/"fancy"/"nice" -> minPrice 3, and add vibe "upscale".
+- Price words, using Google's actual tiers (1=Inexpensive, 2=Moderate, 3=Expensive, 4=Very Expensive): "cheap"/"budget"/"inexpensive" -> maxPrice 1 (not 2 — moderate is not cheap). "affordable"/"reasonable" -> maxPrice 2. "upscale"/"fancy"/"nice" -> minPrice 3, and add vibe "upscale".
 - Only include a key when the request actually supports it. It's fine to return {}.
 
 Example: "happy hour that goes past 7pm" with today = ${DAY_NAMES[today.day]} (index ${today.day}) ->

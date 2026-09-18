@@ -249,6 +249,10 @@ export default function PlanDetail({ id, onBack }) {
         try {
           const { latitude: lat, longitude: lng } = pos.coords;
           setPlan((await sharePlanLocation(id, { lat, lng })).plan);
+          // Old results were computed from the old location — showing them
+          // next to an updated pin on the map would be actively misleading.
+          setResults(null);
+          setResultsError('');
         } catch (err) {
           setError(err.message);
         } finally {
@@ -270,6 +274,8 @@ export default function PlanDetail({ id, onBack }) {
     try {
       setPlan((await sharePlanLocation(id, { address: address.trim() })).plan);
       setAddress('');
+      setResults(null);
+      setResultsError('');
     } catch (err) {
       setError(err.message);
     } finally {

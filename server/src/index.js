@@ -11,6 +11,17 @@ import { queryRouter } from './routes/query.js';
 import { attachUser } from './lib/auth.js';
 
 const app = express();
+app.disable('etag'); // this is a per-session, always-dynamic API — no conditional caching semantics apply
+
+// This API is proxied through Vercel's edge network in production (see
+// client/vercel.json), which can cache and replay GET responses by URL —
+// dangerous here, since /api/plans/:id/results is the same URL every time
+// regardless of who's asking or what just changed (a new location share, a
+// new "Find spots" run). Force every response to skip that layer entirely.
+app.use((req, res, next) => {
+  res.set('Cache-Control', 'no-store');
+  next();
+});
 
 // In dev, Vite proxies /api to this server, so the browser never sees a
 // cross-origin request — CORS is a no-op there. In production the frontend
