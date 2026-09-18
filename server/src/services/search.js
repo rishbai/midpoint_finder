@@ -1,5 +1,5 @@
 import { db } from '../db.js';
-import { isOpenAt, nyDayAndMinutes } from '../lib/hours.js';
+import { isOpenAt, dayAndMinutesAt } from '../lib/hours.js';
 
 const M_PER_DEG_LAT = 111320;
 
@@ -100,11 +100,18 @@ export function searchVenues(f) {
   }));
 
   if (f.openNow || (f.openDay !== undefined && f.openMinutes !== undefined)) {
-    const target = f.openDay !== undefined && f.openMinutes !== undefined
+    const explicitTarget = f.openDay !== undefined && f.openMinutes !== undefined
       ? { day: f.openDay, minutes: f.openMinutes }
-      : nyDayAndMinutes();
+      : null;
+    // "Open now" means now in *that venue's* timezone — a bar in LA and one
+    // in NYC aren't on the same clock, so this is computed per row, not once
+    // for the whole batch. An explicit day/time (from NL parsing) is already
+    // a fixed point in the week and applies as-is regardless of venue location.
     // Unknown hours can't be confirmed open, so they're excluded rather than guessed at.
-    results = results.filter((r) => isOpenAt(r.hours, target) === true);
+    results = results.filter((r) => {
+      const target = explicitTarget || dayAndMinutesAt(new Date(), r.lat, r.lng);
+      return isOpenAt(r.hours, target) === true;
+    });
   }
 
   if (near) {

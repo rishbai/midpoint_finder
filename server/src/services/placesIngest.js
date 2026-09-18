@@ -35,8 +35,9 @@ export function toVenueRow(p) {
   };
 }
 
-// The bounding box (and a plain radius search) spills into NJ, Brooklyn,
-// Queens, and the Bronx — this app is Manhattan-only by design.
-export const inManhattan = (p) => p.formattedAddress?.includes('New York, NY');
+// A radius search near a border can spill into a neighboring country (e.g.
+// near El Paso or Niagara Falls) — this app is US-only by design, not
+// restricted to any one city or state.
+export const inUS = (p) => Boolean(p.formattedAddress?.endsWith(', USA'));
 
 export const CATEGORY_GROUPS = Object.values(CATEGORY_TYPES);

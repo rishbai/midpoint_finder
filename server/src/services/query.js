@@ -3,14 +3,17 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { CATEGORY_TYPES, VIBES } from '../lib/vocab.js';
 import { listCuisines, normalizeFilters } from './search.js';
-import { nyDayAndMinutes, DAY_NAMES } from '../lib/hours.js';
+import { dayAndMinutesAt, DAY_NAMES } from '../lib/hours.js';
 
 const MODEL = process.env.QUERY_MODEL || 'claude-haiku-4-5-20251001';
 const client = new Anthropic(); // reads ANTHROPIC_API_KEY
 
 function buildSystemPrompt(now) {
-  const today = nyDayAndMinutes(now);
-  return `You turn a person's plain-English request for a place to go in Manhattan into a JSON filter object. Reply with JSON only, no prose, no code fences.
+  // No location is known yet at this point (see lib/hours.js) — "today" is a
+  // reasonable guess, not the source of truth; the actual open/closed check
+  // later (search.js) always uses each venue's real location.
+  const today = dayAndMinutesAt(now);
+  return `You turn a person's plain-English request for a place to go into a JSON filter object. Reply with JSON only, no prose, no code fences.
 
 Schema (omit any key you have no evidence for):
 {
@@ -63,7 +66,7 @@ export async function parseQuery(text, referenceTime) {
   // Belt and suspenders: don't let a model slip that forgets the day silently
   // disable the hours filter (search.js requires both fields together).
   if (parsed.openMinutes != null && parsed.openDay == null) {
-    parsed.openDay = nyDayAndMinutes(now).day;
+    parsed.openDay = dayAndMinutesAt(now).day;
   }
   if (parsed.openDay != null && parsed.openMinutes == null) delete parsed.openDay;
 

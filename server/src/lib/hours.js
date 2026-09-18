@@ -5,6 +5,7 @@
 // day is 0=Sunday..6=Saturday. A period with no `close` runs 24 hours (open all week
 // if it's the only period). A close on an earlier day/hour than open means it
 // crosses midnight (e.g. open Fri 22:00, close Sat 02:00).
+import tzlookup from 'tz-lookup';
 
 const DAY_MINUTES = 24 * 60;
 const WEEK_MINUTES = 7 * DAY_MINUTES;
@@ -54,18 +55,33 @@ export function dayIndex(name) {
   return i === -1 ? null : i;
 }
 
-// Venues are all in Manhattan, so hours checks use NY wall-clock time
-// regardless of where the server (or the person searching) actually is.
-const NY_PARTS = new Intl.DateTimeFormat('en-US', {
-  timeZone: 'America/New_York',
-  weekday: 'short',
-  hour: 'numeric',
-  minute: 'numeric',
-  hour12: false,
-});
+// A venue's hours are meaningless without knowing its *local* wall-clock
+// time — a bar in LA "closing at 2am" is a different moment than one in NYC.
+// Used with each venue's own lat/lng wherever possible (see search.js).
+// Falls back to Eastern only when no location is known yet at all (e.g.
+// resolving "today" while parsing free text, before anyone's said where
+// they are — see services/query.js; a day-of-week guess off by the width of
+// one timezone near midnight is an acceptable imprecision there, since the
+// actual open/closed filtering below is always done with the real location).
+const FALLBACK_TIMEZONE = 'America/New_York';
 
-export function nyDayAndMinutes(date = new Date()) {
-  const parts = Object.fromEntries(NY_PARTS.formatToParts(date).map((p) => [p.type, p.value]));
+export function dayAndMinutesAt(date = new Date(), lat, lng) {
+  let timeZone = FALLBACK_TIMEZONE;
+  if (lat != null && lng != null) {
+    try {
+      timeZone = tzlookup(lat, lng);
+    } catch {
+      // Off the coast, over water, etc. — fall back rather than throw.
+    }
+  }
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    weekday: 'short',
+    hour: 'numeric',
+    minute: 'numeric',
+    hour12: false,
+  });
+  const parts = Object.fromEntries(formatter.formatToParts(date).map((p) => [p.type, p.value]));
   const day = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(parts.weekday);
   const hour = Number(parts.hour) % 24;
   return { day, minutes: hour * 60 + Number(parts.minute) };

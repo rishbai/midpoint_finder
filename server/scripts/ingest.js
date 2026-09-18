@@ -9,7 +9,7 @@ import {
   CATEGORY_GROUPS,
   upsertVenue as upsert,
   toVenueRow as toRow,
-  inManhattan,
+  inUS,
 } from '../src/services/placesIngest.js';
 
 const AREAS = {
@@ -36,7 +36,7 @@ async function sweep(lat, lng, radius, includedTypes, depth = 0) {
   const places = await searchNearby({ lat, lng, radius, includedTypes });
   calls++;
 
-  const rows = places.filter(inManhattan).map(toRow);
+  const rows = places.filter(inUS).map(toRow);
   db.transaction(() => rows.forEach((r) => upsert.run(r)))();
   rows.forEach((r) => seen.add(r.id));
 

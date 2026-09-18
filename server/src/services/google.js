@@ -59,7 +59,7 @@ export async function placeHours(placeId) {
 export async function geocode(address) {
   const url = new URL('https://maps.googleapis.com/maps/api/geocode/json');
   url.searchParams.set('address', address);
-  url.searchParams.set('components', 'administrative_area:NY|country:US');
+  url.searchParams.set('components', 'country:US'); // anywhere in the US, not tied to one state
   url.searchParams.set('key', apiKey());
 
   const res = await fetch(url);

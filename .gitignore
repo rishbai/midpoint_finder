@@ -2,3 +2,5 @@ node_modules
 .env
 server/data/*.db*
 client/dist
+.vercel
+.env*

@@ -1,11 +1,12 @@
-// On-demand Places coverage: rather than paying to pre-ingest all of
-// Manhattan up front (thousands of calls, most of it never used), fetch
-// venues right around wherever people are actually trying to meet, the
-// first time it's needed — then remember that cell for a while so a busy
-// neighborhood doesn't get re-fetched (and re-billed) on every plan.
+// On-demand Places coverage: rather than paying to pre-ingest a whole city
+// (or the whole country) up front, fetch venues right around wherever people
+// are actually trying to meet, the first time it's needed — then remember
+// that cell for a while so a busy neighborhood doesn't get re-fetched (and
+// re-billed) on every plan. Works anywhere in the US: there's no city- or
+// state-specific restriction here, just wherever the group's center lands.
 import { db } from '../db.js';
 import { searchNearby } from './google.js';
-import { CATEGORY_GROUPS, upsertVenue, toVenueRow, inManhattan } from './placesIngest.js';
+import { CATEGORY_GROUPS, upsertVenue, toVenueRow, inUS } from './placesIngest.js';
 import { tagVenues } from './tagging.js';
 
 const CELL_DEGREES = 0.01; // ~1.1km — one cell roughly covers one sweep's useful radius
@@ -31,7 +32,7 @@ export async function ensureCoverage(center) {
   const inserted = [];
   for (const includedTypes of CATEGORY_GROUPS) {
     const places = await searchNearby({ lat: center.lat, lng: center.lng, radius: SWEEP_RADIUS, includedTypes });
-    const rows = places.filter(inManhattan).map(toVenueRow);
+    const rows = places.filter(inUS).map(toVenueRow);
     db.transaction(() => rows.forEach((r) => upsertVenue.run(r)))();
     inserted.push(...rows);
   }

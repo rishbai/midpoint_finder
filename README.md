@@ -1,10 +1,12 @@
 # midpoint
 
-Find restaurants, cafes, and bars in Manhattan by what you actually want ("happy hour that goes past 7pm," a price, a cuisine, a specific dish), invite friends to a plan, and find the spot that's fair for everyone to get to — whichever of walking or transit (subway, bus, rail) is actually faster for each person.
+Find restaurants, cafes, and bars anywhere in the US by what you actually want ("happy hour that goes past 7pm," a price, a cuisine, a specific dish), invite friends to a plan, and find the spot that's fair for everyone to get to — whichever of walking or transit (subway, bus, rail) is actually faster for each person.
+
+Not tied to any one city: venue search, hours, and timezone handling are all based on wherever a plan's group actually is — see `services/liveIngest.js` and `lib/hours.js`.
 
 ## How it works
 
-1. **Ingest** (`server/scripts/ingest.js`) sweeps a grid over Manhattan with the Google Places API and saves venues, including opening hours, to a local SQLite database. When a search area returns the max 20 results, it splits into smaller circles so dense blocks don't get missed.
+1. **Ingest** (`server/scripts/ingest.js`) sweeps a grid over a chosen area with the Google Places API and saves venues, including opening hours, to a local SQLite database — useful for pre-seeding a city you know you'll use a lot. `services/liveIngest.js` does the same thing automatically and on-demand for wherever a plan's group actually is, so pre-seeding isn't required. When a search area returns the max 20 results, it splits into smaller circles so dense blocks don't get missed.
 2. **Tag** (`server/scripts/tag.js`) sends each venue's reviews to Claude and saves vibe tags (date night, happy hour, work friendly, etc.) and praised dishes.
 3. **Search** runs entirely against the local database, so filtering costs nothing per query. A free-text box ("Ask") sends what you typed to Claude, which turns it into structured filters — category, vibe, price, and an "open until" day/time check against the venue's real hours. The same filters (plus that free-text box) are also available when creating or editing a plan.
 4. **Accounts and friends**: sign up, add friends by email or by sharing your personal invite link (`/add-friend/:token`, in the Friends tab) — either way it lands as a normal pending request the other person accepts.
@@ -38,11 +40,12 @@ npm run dev               # http://localhost:5173
 - Geocoding API
 - Routes API
 
-### Ingesting all of Manhattan
+### Pre-seeding a whole city (optional)
+Not required — `services/liveIngest.js` fetches venues on demand for wherever a plan's group actually is, anywhere in the US. Bulk-ingesting is only worth it for a city you know will get heavy, repeat use, to avoid the ~15-20 second first-search delay while it live-fetches.
 ```bash
 npm run ingest -- --area=manhattan --yes
 ```
-This makes thousands of Places calls and requesting reviews puts you in a higher pricing tier. Check Google's current pricing and set a budget alert first. Start with `--area=dev` until everything works.
+`manhattan` is the only pre-built area (`AREAS` in `scripts/ingest.js`) — add your own bounding box there for another city. This makes thousands of Places calls and requesting reviews puts you in a higher pricing tier. Check Google's current pricing and set a budget alert first. Start with `--area=dev` until everything works.
 
 ### Backfilling hours on an existing database
 Venues ingested before hours were tracked have `hours = NULL`, which makes them invisible to any "open at/past X" filter. Fill them in with a cheap, hours-only Place Details call:
