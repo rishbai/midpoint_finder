@@ -23,11 +23,12 @@ export async function findMeetup({ addresses, filters, departureTime }) {
   return { people, center, results, note };
 }
 
-// Finds candidates near `center` matching `filters`, gets real transit+walk
-// times to a shortlist, and ranks by fairness. Returns [] results (not an
-// error) when nothing pans out, so the caller can decide whether to relax
-// and retry rather than just showing a dead end.
-async function searchAndRank(filters, center, people, departureTime) {
+const CLOSE_ENOUGH_METERS = 2000;
+
+// Cheap (local DB, plus a live-ingest sweep if the area's sparse) — no
+// Routes API cost. Widens the search radius until there's a decent pool,
+// same as before.
+async function findCandidates(filters, center) {
   let candidates = searchVenues({ ...filters, lat: center.lat, lng: center.lng, radius: SEARCH_RADII[0], sort: 'best', limit: 200 });
   if (candidates.length < MIN_CANDIDATES) {
     await ensureCoverage(center).catch((err) => console.warn('Live coverage sweep failed:', err.message));
@@ -36,7 +37,16 @@ async function searchAndRank(filters, center, people, departureTime) {
     candidates = searchVenues({ ...filters, lat: center.lat, lng: center.lng, radius, sort: 'best', limit: 200 });
     if (candidates.length >= MIN_CANDIDATES) break;
   }
-  if (!candidates.length) return { candidates, results: [] };
+  return candidates;
+}
+
+const nearestDistance = (candidates) =>
+  candidates.length ? Math.min(...candidates.map((c) => c.distance ?? Infinity)) : Infinity;
+
+// Expensive (real Routes API calls) — only ever run once, on whichever
+// candidate list wins below.
+async function rankCandidates(candidates, people, departureTime) {
+  if (!candidates.length) return [];
 
   // Real travel times from each person to the shortlist — transit (which
   // Google already routes over subway, bus, and rail, whichever combination
@@ -51,7 +61,7 @@ async function searchAndRank(filters, center, people, departureTime) {
   ]);
 
   // Rank by fairness: longest trip first, then how uneven trips are.
-  const results = shortlist
+  return shortlist
     .map((venue, d) => {
       const legs = people.map((_, o) => pickBestLeg(transit[o][d], walking[o][d]));
       if (legs.some((l) => l == null)) return null;
@@ -70,8 +80,6 @@ async function searchAndRank(filters, center, people, departureTime) {
     })
     .filter(Boolean)
     .sort((a, b) => a.score - b.score);
-
-  return { candidates, results };
 }
 
 // Shared by the anonymous "Meet up" flow (addresses geocoded above) and the
@@ -83,31 +91,48 @@ export async function rankVenuesForPeople(people, filters, departureTime) {
     lng: people.reduce((s, p) => s + p.lng, 0) / people.length,
   };
 
-  let { candidates, results } = await searchAndRank(filters, center, people, departureTime);
-  let note = null;
-
-  // A narrow ask (especially a specific vibe — it depends on Claude having
-  // found that exact thing mentioned in reviews, so it's easy to under-match)
-  // can rule out every real, nearby option. Don't just show a dead end when
-  // that happens: drop the narrowest parts of the filter and try again,
-  // rather than pretending nothing at all fits the general idea.
-  if (!results.length && (filters.vibes?.length || filters.dish)) {
-    const relaxed = { ...filters, vibes: [], dish: undefined };
-    const retry = await searchAndRank(relaxed, center, people, departureTime);
-    if (retry.results.length) {
-      ({ candidates, results } = retry);
-      const dropped = [filters.vibes?.length ? 'vibe' : null, filters.dish ? 'dish' : null].filter(Boolean).join('/');
-      note = `Nothing matched every filter exactly, so the ${dropped} filter was dropped — these still match everything else.`;
-    }
+  // Try progressively looser variants of the filters until something shows
+  // up close to the middle. A narrow ask can rule out every real, nearby
+  // option even when the general idea ("a cheap bar") is well served nearby —
+  // a specific vibe tag depends on Claude having found that exact thing
+  // mentioned in a review (easy to under-match), and a strict price tier can
+  // just be rare in one particular neighborhood without meaning "cheap" was
+  // wrong, only that the cutoff was one notch too tight for this spot.
+  // Each attempt here is a cheap local search, not a Routes API call — only
+  // the winning candidate list actually gets real travel times computed.
+  const attempts = [{ filters, note: null }];
+  if (filters.vibes?.length || filters.dish) {
+    const dropped = [filters.vibes?.length ? 'vibe' : null, filters.dish ? 'dish' : null].filter(Boolean).join('/');
+    attempts.push({
+      filters: { ...filters, vibes: [], dish: undefined },
+      note: `Nothing matched every filter exactly, so the ${dropped} filter was dropped — these still match everything else.`,
+    });
+  }
+  if (filters.maxPrice !== undefined && filters.maxPrice < 4) {
+    attempts.push({
+      filters: { ...filters, vibes: [], dish: undefined, maxPrice: filters.maxPrice + 1 },
+      note: 'Nothing cheap enough was close by, so the price cutoff was loosened by one tier.',
+    });
   }
 
+  let candidates = [];
+  let note = null;
+  for (const attempt of attempts) {
+    const found = await findCandidates(attempt.filters, center);
+    if (!found.length) continue;
+    candidates = found;
+    note = attempt.note;
+    if (nearestDistance(found) <= CLOSE_ENOUGH_METERS) break; // good enough, stop relaxing
+  }
+  if (!candidates.length) return { center, results: [] };
+
+  const results = await rankCandidates(candidates, people, departureTime);
   if (!results.length) return { center, results: [] };
 
-  // Even after a live sweep (and a relaxed retry), the honest truth if the
-  // closest match is still far: say so, rather than presenting a distant
-  // venue as a good "middle."
-  const nearest = Math.min(...candidates.map((c) => c.distance ?? Infinity));
-  if (!note && nearest > 2000) {
+  // Even after all that, the honest truth if the closest match is still far:
+  // say so, rather than presenting a distant venue as a good "middle."
+  const nearest = nearestDistance(candidates);
+  if (!note && nearest > CLOSE_ENOUGH_METERS) {
     note = `The closest match is ${(nearest / 1000).toFixed(1)}km from the middle — this area may be thin on options.`;
   }
 
