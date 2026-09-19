@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { parseQuery, getFriends, getMeta } from '../api.js';
-import { summarizeFilters } from '../format.js';
+import { summarizeFilters, initial } from '../format.js';
+import Avatar from './Avatar.jsx';
 import Filters, { EMPTY_FILTERS } from './Filters.jsx';
 
 function toLocalInput(iso) {
@@ -11,11 +12,11 @@ function toLocalInput(iso) {
 }
 
 // Shared by NewPlan (create) and PlanDetail's edit mode.
-export default function PlanForm({ initial, existingParticipantIds = [], onSubmit, onCancel, submitLabel }) {
-  const [title, setTitle] = useState(initial?.title || '');
-  const [queryText, setQueryText] = useState(initial?.queryText || '');
-  const [filters, setFilters] = useState(initial?.filters || EMPTY_FILTERS);
-  const [plannedFor, setPlannedFor] = useState(toLocalInput(initial?.plannedFor));
+export default function PlanForm({ initial: initialPlan, existingParticipantIds = [], onSubmit, onCancel, submitLabel }) {
+  const [title, setTitle] = useState(initialPlan?.title || '');
+  const [queryText, setQueryText] = useState(initialPlan?.queryText || '');
+  const [filters, setFilters] = useState(initialPlan?.filters || EMPTY_FILTERS);
+  const [plannedFor, setPlannedFor] = useState(toLocalInput(initialPlan?.plannedFor));
   const [meta, setMeta] = useState({ categories: [], vibes: [], cuisines: [] });
   const [friends, setFriends] = useState([]);
   const [selected, setSelected] = useState([]);
@@ -77,55 +78,74 @@ export default function PlanForm({ initial, existingParticipantIds = [], onSubmi
 
   const invitable = friends.filter((f) => !existingParticipantIds.includes(f.id));
   const summary = summarizeFilters(filters);
+  const editing = existingParticipantIds.length > 0;
 
   return (
     <form onSubmit={submit} className="plan-form">
-      <label>
-        Describe it (optional)
-        <input
-          type="text"
-          placeholder="happy hour that goes past 7pm"
-          value={queryText}
-          onChange={(e) => setQueryText(e.target.value)}
-          onBlur={() => queryText.trim() && parse(queryText)}
-        />
-      </label>
-      {parsing && <p className="notice">Reading that…</p>}
+      <div className="form-section">
+        <label>
+          <span className="form-label">What's the plan?</span>
+          <input
+            type="text"
+            className="input-lg"
+            placeholder="Ramen tonight?"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            autoFocus={!editing}
+          />
+        </label>
+      </div>
 
-      <Filters meta={meta} filters={filters} onChange={setFilters} />
-      {summary && <p className="notice">Looking for: {summary}</p>}
+      <div className="form-section">
+        <label>
+          <span className="form-label">What are you looking for?</span>
+          <span className="form-hint">Say it however you'd say it to a friend — it gets turned into the filters below.</span>
+          <input
+            type="text"
+            placeholder="cheap drinks and good deals · quiet coffee shop · late night tacos"
+            value={queryText}
+            onChange={(e) => setQueryText(e.target.value)}
+            onBlur={() => queryText.trim() && parse(queryText)}
+          />
+        </label>
+        {parsing && <p className="form-hint">Reading that…</p>}
+        <Filters meta={meta} filters={filters} onChange={setFilters} />
+        {summary && <p className="notice">Looking for: {summary}</p>}
+      </div>
 
-      <label>
-        Title
-        <input type="text" placeholder="Ramen tonight?" value={title} onChange={(e) => setTitle(e.target.value)} />
-      </label>
+      <div className="form-section">
+        <label>
+          <span className="form-label">When</span>
+          <span className="form-hint">Optional — transit times get checked for this time of day.</span>
+          <input type="datetime-local" value={plannedFor} onChange={(e) => setPlannedFor(e.target.value)} />
+        </label>
+      </div>
 
-      <label>
-        When (optional)
-        <input type="datetime-local" value={plannedFor} onChange={(e) => setPlannedFor(e.target.value)} />
-      </label>
-
-      {invitable.length > 0 && (
-        <fieldset>
-          <legend>{existingParticipantIds.length ? 'Invite more friends' : 'Invite friends'}</legend>
-          <div className="chips">
-            {invitable.map((f) => (
+      <div className="form-section">
+        <span className="form-label">{editing ? 'Invite more friends' : 'Who\'s coming?'}</span>
+        {friends.length === 0 ? (
+          <p className="form-hint">
+            No friends added yet — you can still create the plan and share its invite link afterward, no accounts needed.
+          </p>
+        ) : invitable.length === 0 ? (
+          <p className="form-hint">Everyone you know is already on this plan.</p>
+        ) : (
+          <div className="people-picker">
+            {invitable.map((f, i) => (
               <button
                 key={f.id}
                 type="button"
-                className="chip"
+                className="person-chip"
                 aria-pressed={selected.includes(f.id)}
                 onClick={() => toggleFriend(f.id)}
               >
+                <Avatar index={i} label={initial(f.name)} />
                 {f.name}
               </button>
             ))}
           </div>
-        </fieldset>
-      )}
-      {friends.length === 0 && (
-        <p className="notice">No friends yet — add some in the Friends tab first. You can still save and invite people later.</p>
-      )}
+        )}
+      </div>
 
       {error && <p className="notice">{error}</p>}
       <div className="people-actions">

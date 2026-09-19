@@ -5,6 +5,8 @@ import {
   acceptFriendRequest,
   declineFriendRequest,
 } from '../api.js';
+import { initial } from '../format.js';
+import Avatar from './Avatar.jsx';
 import InviteLinkBox from './InviteLinkBox.jsx';
 
 export default function Friends() {
@@ -44,41 +46,49 @@ export default function Friends() {
 
   return (
     <section>
-      <h2>Friends</h2>
+      <div className="page-head">
+        <h2>Friends</h2>
+      </div>
 
-      {data.inviteToken && (
-        <InviteLinkBox
-          label="Your invite link — anyone who opens it and logs in sends you a friend request"
-          url={`${window.location.origin}/add-friend/${data.inviteToken}`}
-        />
-      )}
-
-      <form className="row" onSubmit={addFriend}>
-        <label>
-          Add by email
-          <input
-            type="email"
-            placeholder="friend@email.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
+      <div className="card">
+        <p className="card-title">Add people</p>
+        {data.inviteToken && (
+          <InviteLinkBox
+            label="Your invite link — send it to anyone; once they sign in, you get a friend request"
+            url={`${window.location.origin}/add-friend/${data.inviteToken}`}
           />
-        </label>
-        <button type="submit" className="primary">Send request</button>
-      </form>
-      {status && <p className="notice">{status}</p>}
-      {error && <p className="notice">{error}</p>}
+        )}
+        <form className="row" onSubmit={addFriend}>
+          <label>
+            Or add by email
+            <input
+              type="email"
+              placeholder="friend@email.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+          </label>
+          <button type="submit" className="primary">Send request</button>
+        </form>
+        {status && <p className="notice">{status}</p>}
+        {error && <p className="notice">{error}</p>}
+      </div>
 
       {data.incoming.length > 0 && (
         <>
-          <h3>Requests</h3>
-          <ul className="plain-list">
-            {data.incoming.map((r) => (
-              <li key={r.id}>
-                <span>{r.name} <span className="muted">({r.email})</span></span>
-                <span>
-                  <button type="button" className="link" onClick={() => respond(r.id, 'decline')}>Decline</button>
-                  <button type="button" className="link" onClick={() => respond(r.id, 'accept')}>Accept</button>
+          <h3 className="section-title">Requests</h3>
+          <ul className="people-list">
+            {data.incoming.map((r, i) => (
+              <li key={r.id} className="person-row">
+                <Avatar index={i} label={initial(r.name)} />
+                <span className="person-name">
+                  {r.name}
+                  <span className="muted small">{r.email}</span>
+                </span>
+                <span className="person-actions">
+                  <button type="button" className="ghost" onClick={() => respond(r.id, 'decline')}>Decline</button>
+                  <button type="button" className="primary small-btn" onClick={() => respond(r.id, 'accept')}>Accept</button>
                 </span>
               </li>
             ))}
@@ -88,24 +98,38 @@ export default function Friends() {
 
       {data.outgoing.length > 0 && (
         <>
-          <h3>Sent</h3>
-          <ul className="plain-list">
-            {data.outgoing.map((r) => (
-              <li key={r.id}>
-                {r.name} <span className="muted">({r.email}) — pending</span>
+          <h3 className="section-title">Sent</h3>
+          <ul className="people-list">
+            {data.outgoing.map((r, i) => (
+              <li key={r.id} className="person-row">
+                <Avatar index={i + 3} label={initial(r.name)} />
+                <span className="person-name">
+                  {r.name}
+                  <span className="muted small">{r.email}</span>
+                </span>
+                <span className="status-chip status-waiting">Pending</span>
               </li>
             ))}
           </ul>
         </>
       )}
 
-      <h3>Your friends</h3>
+      <h3 className="section-title">Your friends</h3>
       {data.friends.length === 0 ? (
-        <p className="notice">No friends yet. Add someone by email to start planning together.</p>
+        <div className="empty">
+          <p className="empty-title">No friends yet</p>
+          <p className="muted">Share your invite link above, or add someone by email, to start planning together.</p>
+        </div>
       ) : (
-        <ul className="plain-list">
-          {data.friends.map((f) => (
-            <li key={f.id}>{f.name} <span className="muted">({f.email})</span></li>
+        <ul className="people-list">
+          {data.friends.map((f, i) => (
+            <li key={f.id} className="person-row">
+              <Avatar index={i} label={initial(f.name)} />
+              <span className="person-name">
+                {f.name}
+                <span className="muted small">{f.email}</span>
+              </span>
+            </li>
           ))}
         </ul>
       )}

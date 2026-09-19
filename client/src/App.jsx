@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { getMeta } from './api.js';
 import { AuthProvider, useAuth } from './auth.jsx';
+import { initial } from './format.js';
 import { EMPTY_FILTERS } from './components/Filters.jsx';
+import Avatar from './components/Avatar.jsx';
 import SearchView from './components/SearchView.jsx';
 import Plans from './components/Plans.jsx';
 import Friends from './components/Friends.jsx';
@@ -59,14 +61,30 @@ function UpgradePrompt() {
 
 function AccountWidget() {
   const { user, loading, logout } = useAuth();
-  if (loading) return null;
-  if (!user) return <span className="muted">Signed out</span>;
+  if (loading || !user) return null;
   return (
     <span className="account">
-      {user.name}
+      <Avatar index={1} label={initial(user.name)} />
+      <span className="account-name">{user.name}</span>
       {user.isGuest && <UpgradePrompt />}
       <button type="button" className="link" onClick={logout}>Log out</button>
     </span>
+  );
+}
+
+// What someone sees on Plans/Friends before they're signed in — a reason to,
+// not just a form.
+function Welcome({ prompt }) {
+  return (
+    <div className="welcome">
+      <p className="welcome-kicker">Meet in the middle</p>
+      <h2 className="welcome-title">Pick a spot that's fair for everyone.</h2>
+      <p className="muted">
+        Make a plan, say what you're in the mood for, invite friends. Everyone shares where they're coming from, and
+        midpoint finds places that are a fair trip for all of you — by train, bus, or on foot.
+      </p>
+      <AuthPanel prompt={prompt} />
+    </div>
   );
 }
 
@@ -100,9 +118,9 @@ function AppShell() {
 
       <div className="layout">
         <main className="full">
-          {tab === 'plans' && (loading ? null : user ? <Plans /> : <AuthPanel prompt="Sign in to make plans with friends." />)}
+          {tab === 'plans' && (loading ? null : user ? <Plans /> : <Welcome prompt="Sign in to make plans with friends." />)}
           {tab === 'search' && <SearchView meta={meta} filters={filters} onFilters={setFilters} />}
-          {tab === 'friends' && (loading ? null : user ? <Friends /> : <AuthPanel prompt="Sign in to add friends." />)}
+          {tab === 'friends' && (loading ? null : user ? <Friends /> : <Welcome prompt="Sign in to add friends." />)}
         </main>
       </div>
     </div>

@@ -24,6 +24,17 @@ export const vehicleLabel = (vehicle) => VEHICLES[vehicle] || 'transit';
 
 export const modeIcon = (mode) => (mode === 'WALK' ? '🚶' : mode === 'TRANSIT' ? '🚇' : '');
 
+// "Sun, Sep 21 · 7:37 PM" — short enough for a card, clear enough on its own.
+export function formatWhen(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const day = d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+  const time = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  return `${day} · ${time}`;
+}
+
+export const initial = (name) => (name ? name.trim()[0].toUpperCase() : '?');
+
 // One-line human summary of an active filters object, e.g. "bar · $$ · 4.5+
 // · happy hour · open now" — used wherever we show what's currently applied.
 export function summarizeFilters(filters) {

@@ -9,7 +9,10 @@ export default function NewPlan({ onCreated, onCancel }) {
 
   return (
     <section>
-      <h2>New plan</h2>
+      <button type="button" className="link" onClick={onCancel}>&larr; Your plans</button>
+      <div className="page-head">
+        <h2>New plan</h2>
+      </div>
       <PlanForm onSubmit={handleSubmit} onCancel={onCancel} submitLabel="Create plan" />
     </section>
   );

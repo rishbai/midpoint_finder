@@ -12,38 +12,42 @@ import {
   getFriends,
 } from '../api.js';
 import { useAuth } from '../auth.jsx';
-import { personLetter, modeIcon, vehicleLabel } from '../format.js';
+import { modeIcon, vehicleLabel, formatWhen, initial } from '../format.js';
+import Avatar from './Avatar.jsx';
 import InviteLinkBox from './InviteLinkBox.jsx';
 import PlanForm from './PlanForm.jsx';
 import PlanMap from './PlanMap.jsx';
 import RouteMap from './RouteMap.jsx';
 import VenueCard from './VenueCard.jsx';
 
-function Avatar({ index }) {
+function participantStatus(p) {
+  if (p.status === 'declined') return { kind: 'muted', text: 'Declined' };
+  if (p.hasLocation) return { kind: 'ready', text: 'Location shared' };
+  if (p.status === 'joined') return { kind: 'waiting', text: 'No location yet' };
+  return { kind: 'invited', text: 'Invited' };
+}
+
+function Section({ title, action, children }) {
   return (
-    <span className="avatar" aria-hidden="true" data-i={index % 6}>
-      {personLetter(index)}
-    </span>
+    <section className="section">
+      <div className="section-head">
+        <h3 className="section-title">{title}</h3>
+        {action}
+      </div>
+      {children}
+    </section>
   );
 }
 
-function statusLabel(p) {
-  if (p.status === 'declined') return 'declined';
-  if (p.hasLocation) return 'shared location';
-  if (p.status === 'joined') return 'joined, no location yet';
-  return 'invited';
-}
-
-function InvitePanel({ plan, onInvited }) {
-  const [open, setOpen] = useState(false);
+function InvitePanel({ plan, onInvited, onClose }) {
   const [friends, setFriends] = useState([]);
   const [selected, setSelected] = useState([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (open) getFriends().then((d) => setFriends(d.friends)).catch(() => {});
-  }, [open]);
+    getFriends().then((d) => setFriends(d.friends)).catch(() => {});
+  }, []);
 
   const existingIds = plan.participants.map((p) => p.userId);
   const invitable = friends.filter((f) => !existingIds.includes(f.id));
@@ -57,8 +61,7 @@ function InvitePanel({ plan, onInvited }) {
     setError('');
     try {
       await onInvited(selected);
-      setOpen(false);
-      setSelected([]);
+      onClose();
     } catch (err) {
       setError(err.message);
     } finally {
@@ -66,26 +69,22 @@ function InvitePanel({ plan, onInvited }) {
     }
   }
 
-  if (!open) {
-    return (
-      <button type="button" className="link" onClick={() => setOpen(true)}>+ Invite more</button>
-    );
-  }
-
   return (
-    <div className="share-location">
+    <div className="card">
+      <p className="card-title">Invite friends</p>
       {invitable.length === 0 ? (
-        <p className="notice">Everyone you can invite is already on this plan.</p>
+        <p className="form-hint">Everyone you know is already on this plan — share the invite link for anyone else.</p>
       ) : (
-        <div className="chips">
-          {invitable.map((f) => (
+        <div className="people-picker">
+          {invitable.map((f, i) => (
             <button
               key={f.id}
               type="button"
-              className="chip"
+              className="person-chip"
               aria-pressed={selected.includes(f.id)}
               onClick={() => toggle(f.id)}
             >
+              <Avatar index={i} label={initial(f.name)} />
               {f.name}
             </button>
           ))}
@@ -93,7 +92,7 @@ function InvitePanel({ plan, onInvited }) {
       )}
       {error && <p className="notice">{error}</p>}
       <div className="people-actions">
-        <button type="button" className="link" onClick={() => setOpen(false)}>Cancel</button>
+        <button type="button" className="link" onClick={onClose}>Cancel</button>
         <button type="button" className="primary" onClick={submit} disabled={busy || selected.length === 0}>
           {busy ? 'Inviting' : 'Send invites'}
         </button>
@@ -190,6 +189,8 @@ export default function PlanDetail({ id, onBack }) {
   const [results, setResults] = useState(null);
   const [resultsError, setResultsError] = useState('');
   const [loadingResults, setLoadingResults] = useState(false);
+  const [inviting, setInviting] = useState(false);
+  const [showLink, setShowLink] = useState(false);
 
   const refresh = useCallback(
     () => getPlan(id).then((d) => setPlan(d.plan)).catch((err) => setError(err.message)),
@@ -215,6 +216,7 @@ export default function PlanDetail({ id, onBack }) {
   const me = plan.participants.find((p) => p.userId === user.id);
   const sharedCount = plan.participants.filter((p) => p.hasLocation).length;
   const canSeeResults = sharedCount >= 2;
+  const host = plan.participants.find((p) => p.userId === plan.hostId);
 
   // colorIndex = position in plan.participants, so a pin matches that
   // person's Avatar color in the list above.
@@ -338,8 +340,10 @@ export default function PlanDetail({ id, onBack }) {
   if (mode === 'edit') {
     return (
       <section>
-        <button type="button" className="link" onClick={() => setMode('view')}>&larr; Back</button>
-        <h2>Edit plan</h2>
+        <button type="button" className="link" onClick={() => setMode('view')}>&larr; Back to plan</button>
+        <div className="page-head">
+          <h2>Edit plan</h2>
+        </div>
         <PlanForm
           initial={plan}
           existingParticipantIds={plan.participants.map((p) => p.userId)}
@@ -352,126 +356,179 @@ export default function PlanDetail({ id, onBack }) {
   }
 
   return (
-    <section>
-      <button type="button" className="link" onClick={onBack}>&larr; All plans</button>
-      <div className="plan-title-row">
-        <h2>{plan.title}</h2>
-        {isHost && (
-          <div className="plan-actions">
-            <button type="button" className="link" onClick={() => setMode('edit')}>Edit</button>
-            <button type="button" className="link danger" onClick={removePlan} disabled={busy}>Delete</button>
-          </div>
-        )}
-      </div>
-      {plan.queryText && <p className="muted">Looking for: {plan.queryText}</p>}
-      {plan.plannedFor && (
-        <p className="muted">When: {new Date(plan.plannedFor).toLocaleString()}</p>
-      )}
+    <div className="plan-detail">
+      <button type="button" className="link" onClick={onBack}>&larr; Your plans</button>
 
-      <ul className="plain-list">
-        {plan.participants.map((p, i) => (
-          <li key={p.userId}>
-            <span><Avatar index={i} /> {p.name}</span>
-            <span className="muted">{statusLabel(p)}</span>
-          </li>
-        ))}
-      </ul>
-
-      <InviteLinkBox
-        label="Invite link — anyone with this can join, no account needed"
-        url={`${window.location.origin}/join/${plan.shareToken}`}
-      />
-
-      {peopleForMap.length > 0 && <PlanMap people={peopleForMap} venues={venuesForMap} />}
-
-      {isHost && <InvitePanel plan={plan} onInvited={(ids) => invitePlan(id, ids).then((d) => setPlan(d.plan))} />}
+      <header className="plan-hero">
+        <div className="plan-hero-head">
+          <h2>{plan.title}</h2>
+          {isHost && (
+            <div className="plan-actions">
+              <button type="button" className="ghost" onClick={() => setMode('edit')}>Edit</button>
+              <button type="button" className="ghost danger" onClick={removePlan} disabled={busy}>Delete</button>
+            </div>
+          )}
+        </div>
+        <div className="plan-meta">
+          {plan.queryText && <span className="meta-chip">{plan.queryText}</span>}
+          {plan.plannedFor && <span className="meta-chip">{formatWhen(plan.plannedFor)}</span>}
+          {host && !isHost && <span className="meta-chip muted">Hosted by {host.name}</span>}
+        </div>
+      </header>
 
       {me?.status === 'invited' && (
-        <div className="people-actions">
-          <button type="button" className="link" onClick={() => respond('declined')} disabled={busy}>
-            Decline
-          </button>
-          <button type="button" className="primary" onClick={() => respond('joined')} disabled={busy}>
-            Join
-          </button>
+        <div className="card card-accent">
+          <p className="card-title">{host?.name || 'Someone'} invited you</p>
+          <p className="form-hint">Join to share where you're coming from and see spots that work for everyone.</p>
+          <div className="people-actions">
+            <button type="button" className="link" onClick={() => respond('declined')} disabled={busy}>
+              Decline
+            </button>
+            <button type="button" className="primary" onClick={() => respond('joined')} disabled={busy}>
+              Join
+            </button>
+          </div>
         </div>
       )}
 
-      {me && me.status !== 'declined' && (
-        <div className="share-location">
-          <p className="muted">
-            {me.hasLocation ? `Your shared location: ${me.address || 'current location'}` : "You haven't shared your location yet."}
-          </p>
-          <button type="button" className="primary" onClick={shareGeolocation} disabled={busy}>
-            {me.hasLocation ? 'Update my location' : 'Share my location'}
-          </button>
-          <form onSubmit={shareAddress}>
-            <label>
-              or type an address
+      <Section
+        title={`Who's in · ${plan.participants.length}`}
+        action={
+          <div className="invite-row">
+            {isHost && !inviting && (
+              <button type="button" className="ghost" onClick={() => setInviting(true)}>+ Invite friends</button>
+            )}
+            <button type="button" className="ghost" onClick={() => setShowLink((v) => !v)}>
+              {showLink ? 'Hide link' : 'Share link'}
+            </button>
+          </div>
+        }
+      >
+        <ul className="people-list">
+          {plan.participants.map((p, i) => {
+            const status = participantStatus(p);
+            return (
+              <li key={p.userId} className="person-row">
+                <Avatar index={i} />
+                <span className="person-name">
+                  {p.name}
+                  {p.userId === plan.hostId && <span className="muted small">host</span>}
+                </span>
+                <span className={`status-chip status-${status.kind}`}>{status.text}</span>
+              </li>
+            );
+          })}
+        </ul>
+        {showLink && (
+          <InviteLinkBox
+            label="Anyone with this link can join — no account needed"
+            url={`${window.location.origin}/join/${plan.shareToken}`}
+          />
+        )}
+        {inviting && (
+          <InvitePanel
+            plan={plan}
+            onInvited={(ids) => invitePlan(id, ids).then((d) => setPlan(d.plan))}
+            onClose={() => setInviting(false)}
+          />
+        )}
+      </Section>
+
+      <Section title="Where everyone is">
+        {peopleForMap.length > 0 ? (
+          <PlanMap people={peopleForMap} venues={venuesForMap} />
+        ) : (
+          <p className="form-hint">The map fills in as people share where they're coming from.</p>
+        )}
+
+        {me && me.status !== 'declined' && (
+          <div className="card location-card">
+            <p className="card-title">
+              {me.hasLocation ? 'Your starting point' : 'Where are you coming from?'}
+            </p>
+            {me.hasLocation && <p className="muted small">{me.address || 'Current location'}</p>}
+            <button type="button" className="primary" onClick={shareGeolocation} disabled={busy}>
+              {me.hasLocation ? 'Update my location' : 'Share my location'}
+            </button>
+            <form onSubmit={shareAddress} className="address-form">
               <input
                 type="text"
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
-                placeholder="Address or cross streets"
+                placeholder="or type an address / cross streets"
+                aria-label="Address"
               />
-            </label>
-            <button type="submit" className="link" disabled={busy}>Use address</button>
-          </form>
-        </div>
-      )}
-
-      {me && !isHost && me.status !== 'declined' && (
-        <button type="button" className="link danger" onClick={leave} disabled={busy}>Leave plan</button>
-      )}
+              <button type="submit" className="ghost" disabled={busy || !address.trim()}>Use address</button>
+            </form>
+          </div>
+        )}
+      </Section>
 
       {error && <p className="notice">{error}</p>}
 
-      <div className="results-header">
-        <p className="count">{sharedCount}/{plan.participants.length} shared their location</p>
-        {canSeeResults && (
-          <button type="button" className="primary" onClick={loadResults} disabled={loadingResults}>
-            {loadingResults ? 'Checking travel times' : 'Find spots'}
-          </button>
+      <Section
+        title="Spots for everyone"
+        action={
+          canSeeResults && (
+            <button type="button" className="primary" onClick={loadResults} disabled={loadingResults}>
+              {loadingResults ? 'Checking travel times…' : results ? 'Refresh spots' : 'Find spots'}
+            </button>
+          )
+        }
+      >
+        {!canSeeResults && (
+          <p className="form-hint">
+            {sharedCount}/{plan.participants.length} shared their location — once at least two have, you can find spots.
+          </p>
         )}
-      </div>
+        {canSeeResults && !results && !loadingResults && (
+          <p className="form-hint">{sharedCount} of {plan.participants.length} are in. Ready when you are.</p>
+        )}
 
-      {resultsError && <p className="notice">{resultsError}</p>}
-      {results?.note && <p className="notice">{results.note}</p>}
+        {resultsError && <p className="notice">{resultsError}</p>}
+        {results?.note && <p className="notice">{results.note}</p>}
 
-      {results && results.results.length === 0 && (
-        <p className="notice">No matching places between everyone. Try fewer filters.</p>
+        {results && results.results.length === 0 && (
+          <p className="notice">No matching places between everyone. Try fewer filters.</p>
+        )}
+
+        {results && results.results.length > 0 && (
+          <div className="results">
+            {results.results.map((r) => (
+              <VenueCard key={r.venue.id} venue={r.venue}>
+                <ul className="trips">
+                  {r.minutes.map((m, i) => {
+                    // results.people[i] is who this minutes[i]/modes[i] belongs
+                    // to — look up their position in plan.participants so the
+                    // color here matches the list and map above.
+                    const personIndex = Math.max(
+                      0,
+                      plan.participants.findIndex((p) => p.userId === results.people[i]?.userId)
+                    );
+                    return (
+                      <li key={i}>
+                        <Avatar index={personIndex} /> {m} min {modeIcon(r.modes?.[i])}
+                      </li>
+                    );
+                  })}
+                </ul>
+                <RouteDetail
+                  planId={id}
+                  venue={r.venue}
+                  participants={plan.participants}
+                  peopleForMap={peopleForMap}
+                />
+              </VenueCard>
+            ))}
+          </div>
+        )}
+      </Section>
+
+      {me && !isHost && me.status !== 'declined' && (
+        <p className="plan-foot">
+          <button type="button" className="link danger" onClick={leave} disabled={busy}>Leave this plan</button>
+        </p>
       )}
-
-      {results && results.results.length > 0 && (
-        <div className="results">
-          {results.results.map((r) => (
-            <VenueCard key={r.venue.id} venue={r.venue}>
-              <ul className="trips">
-                {r.minutes.map((m, i) => {
-                  // results.people[i] is who this minutes[i]/modes[i] belongs
-                  // to — look up their position in plan.participants so the
-                  // color here matches the list and map above.
-                  const personIndex = Math.max(
-                    0,
-                    plan.participants.findIndex((p) => p.userId === results.people[i]?.userId)
-                  );
-                  return (
-                    <li key={i}>
-                      <Avatar index={personIndex} /> {m} min {modeIcon(r.modes?.[i])}
-                    </li>
-                  );
-                })}
-              </ul>
-              <RouteDetail
-                planId={id}
-                venue={r.venue}
-                participants={plan.participants}
-                peopleForMap={peopleForMap}
-              />
-            </VenueCard>
-          ))}
-        </div>
-      )}
-    </section>
+    </div>
   );
 }
