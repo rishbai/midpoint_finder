@@ -33,6 +33,7 @@ Rules:
 - "happy hour" implies vibes: ["happy_hour"].
 - "drinks"/"cocktails"/"beer"/"wine"/"a bar"/"happy hour", when no specific food dish is also named, imply category: "bar". Don't let this get dropped just because no other bar-specific word is present — it's what keeps "cheap drinks" from matching a bagel shop.
 - "coffee"/"a cafe"/"to work from" imply category: "cafe".
+- Plain praise with nothing else specific ("good food", "great food", "amazing food", "quality food") implies category: "restaurant" and minRating: 4.5. Don't leave a request like this with no filters at all — "good" specifically means a rating floor, not "anything." Without it, a search just ranks by review volume, which rewards busy tourist/arcade spots over actual food quality.
 - openMinutes = hour*60 + minute, using a 24-hour hour. Convert carefully: 7pm = 19:00 = 19*60 = 1140. 11pm = 23:00 = 1380. 9am = 9:00 = 540.
 - openDay and openMinutes always travel together: never set one without the other.
 - If they give a time ("past 7pm", "after 9", "still open at 11") without naming a day, use today: openDay ${today.day} (${DAY_NAMES[today.day]}), openMinutes = that time converted as above.
