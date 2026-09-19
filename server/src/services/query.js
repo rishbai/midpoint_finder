@@ -31,6 +31,8 @@ Schema (omit any key you have no evidence for):
 
 Rules:
 - "happy hour" implies vibes: ["happy_hour"].
+- "drinks"/"cocktails"/"beer"/"wine"/"a bar"/"happy hour", when no specific food dish is also named, imply category: "bar". Don't let this get dropped just because no other bar-specific word is present — it's what keeps "cheap drinks" from matching a bagel shop.
+- "coffee"/"a cafe"/"to work from" imply category: "cafe".
 - openMinutes = hour*60 + minute, using a 24-hour hour. Convert carefully: 7pm = 19:00 = 19*60 = 1140. 11pm = 23:00 = 1380. 9am = 9:00 = 540.
 - openDay and openMinutes always travel together: never set one without the other.
 - If they give a time ("past 7pm", "after 9", "still open at 11") without naming a day, use today: openDay ${today.day} (${DAY_NAMES[today.day]}), openMinutes = that time converted as above.
