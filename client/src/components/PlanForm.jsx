@@ -102,7 +102,7 @@ export default function PlanForm({ initial: initialPlan, existingParticipantIds 
           <span className="form-hint">Say it however you'd say it to a friend — it gets turned into the filters below.</span>
           <input
             type="text"
-            placeholder="cheap drinks and good deals · quiet coffee shop · late night tacos"
+            placeholder="good Indian food · quiet coffee shop · late night tacos"
             value={queryText}
             onChange={(e) => setQueryText(e.target.value)}
             onBlur={() => queryText.trim() && parse(queryText)}

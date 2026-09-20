@@ -56,7 +56,7 @@ export default function SearchView({ meta, filters, onFilters }) {
       <form className="ask" onSubmit={submitAsk}>
         <input
           type="text"
-          placeholder='Or describe it: "happy hour that goes past 7pm"'
+          placeholder='Or describe it: "good Indian food, open late"'
           value={ask}
           onChange={(e) => setAsk(e.target.value)}
         />
