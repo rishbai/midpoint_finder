@@ -49,7 +49,6 @@ db.exec(`
     name          TEXT NOT NULL,
     is_guest      INTEGER NOT NULL DEFAULT 0, -- joined via a plan's invite link, no real email/password
     friend_invite_token TEXT,          -- this user's personal "add me" link (see routes/friends.js)
-    travel_modes  TEXT,                -- JSON array: how this person will travel (see lib/travelModes.js)
     created_at    TEXT NOT NULL
   );
 
@@ -97,8 +96,8 @@ db.exec(`
     address    TEXT,               -- reverse-geocoded or typed fallback label
     shared_at  TEXT,
     -- How this person travels *for this plan*: at home they take the subway,
-    -- visiting family they drive. NULL falls back to their account default
-    -- (users.travel_modes), so nobody has to answer twice.
+    -- visiting family they drive. It's a property of the trip, not the person,
+    -- so it lives here rather than on the account. NULL means "any way".
     travel_modes TEXT,
     -- Added by the host from just a name and address, with no account of
     -- their own — so the host is the one who maintains their details.
@@ -141,11 +140,6 @@ if (!userColumns.includes('is_guest')) {
 }
 if (!userColumns.includes('friend_invite_token')) {
   db.exec('ALTER TABLE users ADD COLUMN friend_invite_token TEXT');
-}
-// NULL reads as the permissive default (see lib/travelModes.js), so accounts
-// that predate travel preferences behave exactly as they always have.
-if (!userColumns.includes('travel_modes')) {
-  db.exec('ALTER TABLE users ADD COLUMN travel_modes TEXT');
 }
 const untokenedUsers = db.prepare('SELECT id FROM users WHERE friend_invite_token IS NULL').all();
 if (untokenedUsers.length) {

@@ -2,7 +2,6 @@ import crypto from 'node:crypto';
 import { Router } from 'express';
 import { db } from '../db.js';
 import { hashPassword, verifyPassword, signIn, signOut, requireAuth } from '../lib/auth.js';
-import { normalizeTravelModes } from '../lib/travelModes.js';
 
 export const authRouter = Router();
 
@@ -18,7 +17,7 @@ function badRequest(message) {
 }
 
 function publicUser(u) {
-  return { id: u.id, email: u.email, name: u.name, travelModes: normalizeTravelModes(u.travel_modes) };
+  return { id: u.id, email: u.email, name: u.name };
 }
 
 authRouter.post('/auth/signup', async (req, res, next) => {
@@ -34,7 +33,7 @@ authRouter.post('/auth/signup', async (req, res, next) => {
     const id = crypto.randomUUID();
     insertUser.run(id, email, await hashPassword(password), name, crypto.randomBytes(8).toString('hex'), new Date().toISOString());
     signIn(res, id);
-    res.status(201).json({ user: { id, email, name, travelModes: normalizeTravelModes(null) } });
+    res.status(201).json({ user: { id, email, name } });
   } catch (err) {
     next(err);
   }
@@ -80,23 +79,7 @@ authRouter.post('/auth/upgrade', requireAuth, async (req, res, next) => {
       await hashPassword(password),
       req.user.id
     );
-    res.json({ user: { id: req.user.id, email, name: req.user.name, travelModes: req.user.travelModes } });
-  } catch (err) {
-    next(err);
-  }
-});
-
-// How this person gets around, which ranking then honors leg by leg. Stored
-// on the account rather than per plan: someone who won't take the subway
-// won't take it on Tuesday either.
-const setTravelModes = db.prepare('UPDATE users SET travel_modes = ? WHERE id = ?');
-authRouter.put('/auth/travel-modes', requireAuth, (req, res, next) => {
-  try {
-    // normalizeTravelModes drops anything unrecognized and refuses to leave
-    // someone with an empty list, so a bad body can't strand an account.
-    const modes = normalizeTravelModes(req.body?.travelModes);
-    setTravelModes.run(JSON.stringify(modes), req.user.id);
-    res.json({ travelModes: modes });
+    res.json({ user: { id: req.user.id, email, name: req.user.name } });
   } catch (err) {
     next(err);
   }

@@ -1,7 +1,6 @@
 import crypto from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { db } from '../db.js';
-import { normalizeTravelModes } from './travelModes.js';
 
 const SESSION_DAYS = 30;
 const COOKIE_NAME = 'midpoint_session';
@@ -19,7 +18,7 @@ const insertSession = db.prepare(
 );
 const deleteSession = db.prepare('DELETE FROM sessions WHERE token = ?');
 const findSession = db.prepare(`
-  SELECT s.expires_at, u.id, u.email, u.name, u.is_guest, u.travel_modes
+  SELECT s.expires_at, u.id, u.email, u.name, u.is_guest
   FROM sessions s JOIN users u ON u.id = s.user_id
   WHERE s.token = ?
 `);
@@ -46,13 +45,7 @@ export function userForSession(token) {
   }
   // A guest's "email" is an unshown placeholder (see services/plans.js), not
   // something to surface anywhere a real email would be expected.
-  return {
-    id: row.id,
-    email: row.is_guest ? null : row.email,
-    name: row.name,
-    isGuest: !!row.is_guest,
-    travelModes: normalizeTravelModes(row.travel_modes),
-  };
+  return { id: row.id, email: row.is_guest ? null : row.email, name: row.name, isGuest: !!row.is_guest };
 }
 
 // Locally, frontend and API are same-origin (Vite proxies /api), so a plain

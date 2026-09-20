@@ -168,17 +168,25 @@ function AddPersonPanel({ onAdd, onClose }) {
 }
 
 // One person's modes for THIS plan. The same person takes the subway at home
-// and drives when they're visiting family, so this is deliberately separate
-// from the account default they started with.
+// and drives when they're visiting family, so it belongs to the trip rather
+// than to them — there's deliberately no account-wide version of this.
 function ParticipantTravel({ person, canEdit, onChange }) {
   const [open, setOpen] = useState(false);
   const [error, setError] = useState('');
 
   const icons = travelModeIcons(person.travelModes);
+  const summary = travelModeSummary(person.travelModes);
+  // Nobody has said, so ranking is assuming they'll take anything. True by
+  // default, which is fine — but worth offering rather than hiding.
+  const unset = !person.travelModesSet;
+
   if (!canEdit) {
-    return travelModeSummary(person.travelModes) ? (
-      <span className="muted small" title={travelModeSummary(person.travelModes)}>{icons}</span>
-    ) : null;
+    return (
+      <span className="travel-static" title={summary || 'Any way of getting there'}>
+        <span aria-hidden="true">{icons}</span>
+        <span className="sr-only">{summary || 'Any way of getting there'}</span>
+      </span>
+    );
   }
 
   async function change(modes) {
@@ -190,21 +198,33 @@ function ParticipantTravel({ person, canEdit, onChange }) {
     }
   }
 
+  const who = person.isMe ? 'you' : person.name;
   return (
     <span className="participant-travel">
       <button
         type="button"
-        className="link"
+        className={`travel-chip${unset ? ' travel-chip-unset' : ''}`}
         aria-expanded={open}
-        title={travelModeSummary(person.travelModes) || 'Any way of getting there'}
         onClick={() => setOpen(!open)}
       >
-        {icons}
+        {unset ? (
+          person.isMe ? 'How are you getting there?' : `How is ${person.name} getting there?`
+        ) : (
+          <>
+            <span aria-hidden="true">{icons}</span>
+            <span className="travel-chip-text">{summary || 'Any way'}</span>
+          </>
+        )}
       </button>
       {open && (
         <span className="travel-popover">
-          <span className="form-label">How {person.isMe ? 'are you' : `is ${person.name}`} getting there?</span>
-          <span className="form-hint">Just for this plan — it won't change other plans.</span>
+          <span className="form-label">
+            How {person.isMe ? 'are you' : `is ${person.name}`} getting there?
+          </span>
+          <span className="form-hint">
+            Just for this plan — {who === 'you' ? 'your' : `${person.name}'s`} travel times are worked
+            out from this, and other plans are unaffected.
+          </span>
           <TravelModes value={person.travelModes} onChange={change} />
           {error && <span className="notice">{error}</span>}
           <button type="button" className="link" onClick={() => setOpen(false)}>Done</button>
@@ -527,9 +547,13 @@ export default function PlanDetail({ id, onBack }) {
             return (
               <li key={p.userId} className="person-row">
                 <Avatar index={i} />
-                <span className="person-name">
-                  {p.name}
-                  {p.userId === plan.hostId && <span className="muted small">host</span>}
+                <div className="person-main">
+                  <span className="person-line">
+                    <span className="person-name">{p.name}</span>
+                    {p.userId === user.id && <span className="role-tag">you</span>}
+                    {p.userId === plan.hostId && <span className="role-tag">host</span>}
+                    {p.addedByHost && <span className="role-tag">no account</span>}
+                  </span>
                   <ParticipantTravel
                     person={{ ...p, isMe: p.userId === user.id }}
                     canEdit={p.userId === user.id || (isHost && p.addedByHost)}
@@ -539,7 +563,7 @@ export default function PlanDetail({ id, onBack }) {
                       setResults(null); // times were priced under the old preference
                     }}
                   />
-                </span>
+                </div>
                 <span className={`status-chip status-${status.kind}`}>{status.text}</span>
               </li>
             );

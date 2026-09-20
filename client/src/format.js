@@ -25,8 +25,9 @@ export const vehicleLabel = (vehicle) => VEHICLES[vehicle] || 'transit';
 const MODE_ICONS = { WALK: '🚶', TRANSIT: '🚇', DRIVE: '🚗' };
 export const modeIcon = (mode) => MODE_ICONS[mode] || '';
 
-// How one person is willing to travel (users.travel_modes on the server).
-// Everyone gets all four by default; you turn off what you won't use.
+// How one person is willing to travel for one plan
+// (plan_participants.travel_modes on the server). Everyone starts with all
+// four; you turn off what you won't use, for that plan only.
 export const TRAVEL_MODES = [
   { value: 'walk', label: 'Walking', icon: '🚶' },
   { value: 'subway', label: 'Subway & train', icon: '🚇' },

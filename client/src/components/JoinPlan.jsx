@@ -13,7 +13,7 @@ export default function JoinPlan({ token }) {
   const [name, setName] = useState('');
   // Asked here because this is the one moment we have a new person's
   // attention, and their answer is what makes their travel times honest.
-  // A returning account starts from what it already has.
+  // It applies to this plan only — joining another one asks again.
   const [travelModes, setTravelModes] = useState(ALL_TRAVEL_MODES);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -24,10 +24,6 @@ export default function JoinPlan({ token }) {
       .then(setPreview)
       .catch((err) => setError(err.message));
   }, [token]);
-
-  useEffect(() => {
-    if (user?.travelModes?.length) setTravelModes(user.travelModes);
-  }, [user]);
 
   async function submit(e) {
     e.preventDefault();
@@ -93,7 +89,8 @@ export default function JoinPlan({ token }) {
           <div className="form-section">
             <span className="form-label">How will you get there?</span>
             <span className="form-hint">
-              So the spot that gets picked is a fair trip for you too. Turn off anything you'd rather not take.
+              So the spot that gets picked is a fair trip for you too. Just for this plan — turn off
+              anything you'd rather not take.
             </span>
             <TravelModes value={travelModes} onChange={setTravelModes} />
           </div>

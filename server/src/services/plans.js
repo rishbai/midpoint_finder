@@ -27,10 +27,9 @@ const insertPlan = db.prepare(`
   VALUES (@id, @host_id, @title, @query_text, @filters, @planned_for, 'gathering', @share_token, @created_at)
 `);
 const insertGuestUser = db.prepare(`
-  INSERT INTO users (id, email, password_hash, name, is_guest, friend_invite_token, travel_modes, created_at)
-  VALUES (?, ?, ?, ?, 1, ?, ?, ?)
+  INSERT INTO users (id, email, password_hash, name, is_guest, friend_invite_token, created_at)
+  VALUES (?, ?, ?, ?, 1, ?, ?)
 `);
-const setUserTravelModes = db.prepare('UPDATE users SET travel_modes = ? WHERE id = ?');
 const getPlanByToken = db.prepare('SELECT * FROM plans WHERE share_token = ?');
 const getUserName = db.prepare('SELECT name FROM users WHERE id = ?');
 const insertParticipant = db.prepare(`
@@ -47,9 +46,8 @@ const getPlanRow = db.prepare('SELECT * FROM plans WHERE id = ?');
 const getParticipant = db.prepare('SELECT * FROM plan_participants WHERE plan_id = ? AND user_id = ?');
 const listParticipants = db.prepare(`
   SELECT p.user_id, p.status, p.lat, p.lng, p.address, p.shared_at, p.added_by_host,
-         u.name,
-         -- Per-plan preference wins; NULL falls back to the account default.
-         COALESCE(p.travel_modes, u.travel_modes) AS travel_modes,
+         u.name, p.travel_modes,
+         -- Whether they've actually said, as opposed to defaulting to "any way".
          p.travel_modes IS NOT NULL AS travel_modes_set,
          -- a guest's email is an internal placeholder (see joinPlanByToken), never real
          CASE WHEN u.is_guest THEN NULL ELSE u.email END AS email
@@ -155,7 +153,6 @@ export function joinPlanByToken(token, { userId, name, travelModes }) {
       placeholderHash,
       cleanName,
       crypto.randomBytes(8).toString('hex'),
-      JSON.stringify(normalizeTravelModes(travelModes)),
       new Date().toISOString()
     );
     isNewGuest = true;
@@ -168,12 +165,14 @@ export function joinPlanByToken(token, { userId, name, travelModes }) {
     insertParticipant.run(plan.id, finalUserId, 'joined');
   }
   // The answer given on the way in is about this trip, so it's stored on the
-  // participation. A brand-new guest has no account default yet, so seed that
-  // too and their next plan starts from the same sensible place.
+  // participation — joining a different plan later asks again, because the
+  // answer really can be different there.
   if (travelModes !== undefined) {
-    const modes = JSON.stringify(normalizeTravelModes(travelModes));
-    setParticipantTravelModesStmt.run(modes, plan.id, finalUserId);
-    if (isNewGuest) setUserTravelModes.run(modes, finalUserId);
+    setParticipantTravelModesStmt.run(
+      JSON.stringify(normalizeTravelModes(travelModes)),
+      plan.id,
+      finalUserId
+    );
   }
 
   return { userId: finalUserId, isNewGuest, plan: getPlan(plan.id, finalUserId) };
@@ -276,7 +275,6 @@ export async function addPersonByAddress(planId, hostId, { name, address, travel
       crypto.randomBytes(32).toString('hex'), // never given out; can't be used to log in
       cleanName,
       crypto.randomBytes(8).toString('hex'),
-      JSON.stringify(normalizeTravelModes(travelModes)),
       new Date().toISOString()
     );
     insertPlacedParticipant.run(
