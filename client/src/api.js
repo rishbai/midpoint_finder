@@ -56,6 +56,14 @@ export const declineFriendRequest = (id) => request(`/api/friends/requests/${id}
 export const getFriendInvitePreview = (token) => request(`/api/friends/invite/${token}`);
 export const acceptFriendInvite = (token) => request(`/api/friends/invite/${token}`, { method: 'POST' });
 
+// How this person travels — stored on the account, honored by ranking.
+export const updateTravelModes = (travelModes) =>
+  request('/api/auth/travel-modes', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ travelModes }),
+  });
+
 // Plans (invite friends, share location, find the midpoint)
 export const listPlans = () => request('/api/plans');
 export const createPlan = (body) => postJson('/api/plans', body);
@@ -76,4 +84,5 @@ export const getPlanVenueRoutes = (id, venueId) => request(`/api/plans/${id}/rou
 
 // Invite links (no account needed to preview or join)
 export const getPlanPreview = (token) => request(`/api/plans/join/${token}`);
-export const joinPlan = (token, name) => postJson(`/api/plans/join/${token}`, { name });
+export const joinPlan = (token, name, travelModes) =>
+  postJson(`/api/plans/join/${token}`, { name, travelModes });

@@ -12,7 +12,7 @@ import {
   getFriends,
 } from '../api.js';
 import { useAuth } from '../auth.jsx';
-import { modeIcon, vehicleLabel, formatWhen, initial } from '../format.js';
+import { modeIcon, vehicleLabel, formatWhen, initial, travelModeIcons, travelModeSummary } from '../format.js';
 import Avatar from './Avatar.jsx';
 import InviteLinkBox from './InviteLinkBox.jsx';
 import PlanForm from './PlanForm.jsx';
@@ -413,6 +413,11 @@ export default function PlanDetail({ id, onBack }) {
                 <span className="person-name">
                   {p.name}
                   {p.userId === plan.hostId && <span className="muted small">host</span>}
+                  {travelModeSummary(p.travelModes) && (
+                    <span className="muted small" title={travelModeSummary(p.travelModes)}>
+                      {travelModeIcons(p.travelModes)}
+                    </span>
+                  )}
                 </span>
                 <span className={`status-chip status-${status.kind}`}>{status.text}</span>
               </li>

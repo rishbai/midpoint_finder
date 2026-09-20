@@ -5,11 +5,12 @@ import { normalizeFilters } from '../services/search.js';
 export const meetupRouter = Router();
 
 meetupRouter.post('/meetup', async (req, res) => {
-  const { addresses, filters, departureTime } = req.body || {};
+  const { addresses, filters, departureTime, travelModes } = req.body || {};
   const result = await findMeetup({
     addresses,
     filters: normalizeFilters(filters),
     departureTime,
+    travelModes,
   });
   res.json(result);
 });

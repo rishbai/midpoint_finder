@@ -399,6 +399,43 @@ legend { font-size: 0.875rem; font-weight: 700; margin-bottom: 0.4rem; padding: 
 .person-chip .avatar { margin-right: 0; width: 1.6rem; height: 1.6rem; font-size: 0.7rem; }
 .person-chip[aria-pressed='true'] { background: var(--black); border-color: var(--black); color: var(--white); }
 
+/* How one person travels — multi-select, so these read as toggles you switch
+   off rather than a single choice you make. */
+.mode-picker { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.mode-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.75rem;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: var(--white);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+}
+.mode-chip[aria-pressed='true'] { background: var(--black); border-color: var(--black); color: var(--white); }
+.mode-chip:disabled { opacity: 0.5; cursor: default; }
+
+.travel-settings { position: relative; }
+.travel-popover {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  z-index: 20;
+  display: grid;
+  gap: 0.35rem;
+  width: max-content;
+  max-width: min(22rem, calc(100vw - 2rem));
+  padding: 0.9rem;
+  border: 1px solid var(--rule);
+  border-radius: 0.8rem;
+  background: var(--white);
+  box-shadow: 0 8px 28px rgb(0 0 0 / 12%);
+  text-align: left;
+}
+
 .avatar-lg { width: 2.6rem; height: 2.6rem; font-size: 1rem; }
 .avatar-stack { display: inline-flex; align-items: center; }
 .avatar-stack .avatar { margin-right: -0.45rem; border: 2px solid var(--white); width: 1.7rem; height: 1.7rem; font-size: 0.7rem; }

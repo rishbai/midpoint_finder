@@ -58,6 +58,10 @@ plansRouter.post('/plans/join/:token', (req, res, next) => {
     const { userId, isNewGuest, plan } = joinPlanByToken(req.params.token, {
       userId: req.user?.id,
       name: req.body?.name,
+      // Someone joining by link says how they get around at the same time as
+      // their name — it's the only moment we have their attention, and their
+      // answer is what makes the "fair middle" fair for them.
+      travelModes: req.body?.travelModes,
     });
     if (isNewGuest) signIn(res, userId);
     res.json({ plan });

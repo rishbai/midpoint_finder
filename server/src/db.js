@@ -49,6 +49,7 @@ db.exec(`
     name          TEXT NOT NULL,
     is_guest      INTEGER NOT NULL DEFAULT 0, -- joined via a plan's invite link, no real email/password
     friend_invite_token TEXT,          -- this user's personal "add me" link (see routes/friends.js)
+    travel_modes  TEXT,                -- JSON array: how this person will travel (see lib/travelModes.js)
     created_at    TEXT NOT NULL
   );
 
@@ -82,6 +83,7 @@ db.exec(`
     planned_for TEXT,               -- ISO datetime, optional
     status      TEXT NOT NULL DEFAULT 'gathering' CHECK (status IN ('gathering', 'closed')),
     share_token TEXT,               -- opens the plan for anyone with the link (see services/plans.js)
+    resolved_modes TEXT,            -- JSON array: what the last ranking actually priced
     created_at  TEXT NOT NULL
   );
   CREATE INDEX IF NOT EXISTS idx_plans_host ON plans(host_id);
@@ -133,6 +135,11 @@ if (!userColumns.includes('is_guest')) {
 if (!userColumns.includes('friend_invite_token')) {
   db.exec('ALTER TABLE users ADD COLUMN friend_invite_token TEXT');
 }
+// NULL reads as the permissive default (see lib/travelModes.js), so accounts
+// that predate travel preferences behave exactly as they always have.
+if (!userColumns.includes('travel_modes')) {
+  db.exec('ALTER TABLE users ADD COLUMN travel_modes TEXT');
+}
 const untokenedUsers = db.prepare('SELECT id FROM users WHERE friend_invite_token IS NULL').all();
 if (untokenedUsers.length) {
   const setToken = db.prepare('UPDATE users SET friend_invite_token = ? WHERE id = ?');
@@ -145,6 +152,12 @@ db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_friend_invite_token ON user
 const planColumns = db.prepare("PRAGMA table_info(plans)").all().map((c) => c.name);
 if (!planColumns.includes('share_token')) {
   db.exec('ALTER TABLE plans ADD COLUMN share_token TEXT');
+}
+// Whether driving got priced is a decision about the group as a whole, not
+// about one leg — so the step-by-step view has to be told, not left to
+// re-derive it and disagree. Written by computePlanResults.
+if (!planColumns.includes('resolved_modes')) {
+  db.exec('ALTER TABLE plans ADD COLUMN resolved_modes TEXT');
 }
 // Plans created before invite links existed don't have a token yet.
 const untokened = db.prepare('SELECT id FROM plans WHERE share_token IS NULL').all();

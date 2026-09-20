@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getMeta } from './api.js';
 import { AuthProvider, useAuth } from './auth.jsx';
-import { initial } from './format.js';
+import { initial, travelModeIcons } from './format.js';
 import { EMPTY_FILTERS } from './components/Filters.jsx';
 import Avatar from './components/Avatar.jsx';
 import SearchView from './components/SearchView.jsx';
@@ -10,6 +10,7 @@ import Friends from './components/Friends.jsx';
 import AuthPanel from './components/AuthPanel.jsx';
 import JoinPlan from './components/JoinPlan.jsx';
 import AddFriend from './components/AddFriend.jsx';
+import TravelModes from './components/TravelModes.jsx';
 
 function UpgradePrompt() {
   const { upgrade } = useAuth();
@@ -59,16 +60,60 @@ function UpgradePrompt() {
   );
 }
 
+// Your own travel preferences, reachable from anywhere in the app — this is
+// a setting people change when they notice a result assumes something wrong
+// ("why is it routing me on the subway?"), so it shouldn't be buried.
+function TravelSettings() {
+  const { user, setTravelModes } = useAuth();
+  const [open, setOpen] = useState(false);
+  const [error, setError] = useState('');
+
+  async function change(modes) {
+    setError('');
+    try {
+      await setTravelModes(modes);
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  return (
+    <div className="travel-settings">
+      <button
+        type="button"
+        className="link"
+        aria-expanded={open}
+        title="How you get around"
+        onClick={() => setOpen(!open)}
+      >
+        {travelModeIcons(user.travelModes) || 'Set travel'}
+      </button>
+      {open && (
+        <div className="travel-popover">
+          <span className="form-label">How do you get around?</span>
+          <span className="form-hint">
+            Used for your travel times in every plan. Turn off anything you'd rather not take.
+          </span>
+          <TravelModes value={user.travelModes} onChange={change} />
+          {error && <p className="notice">{error}</p>}
+          <button type="button" className="link" onClick={() => setOpen(false)}>Done</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AccountWidget() {
   const { user, loading, logout } = useAuth();
   if (loading || !user) return null;
   return (
-    <span className="account">
+    <div className="account">
       <Avatar index={1} label={initial(user.name)} />
       <span className="account-name">{user.name}</span>
+      <TravelSettings />
       {user.isGuest && <UpgradePrompt />}
       <button type="button" className="link" onClick={logout}>Log out</button>
-    </span>
+    </div>
   );
 }
 

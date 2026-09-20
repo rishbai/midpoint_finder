@@ -1,5 +1,12 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import { getMe, login as apiLogin, signup as apiSignup, logout as apiLogout, upgradeAccount } from './api.js';
+import {
+  getMe,
+  login as apiLogin,
+  signup as apiSignup,
+  logout as apiLogout,
+  upgradeAccount,
+  updateTravelModes as apiUpdateTravelModes,
+} from './api.js';
 
 const AuthContext = createContext(null);
 
@@ -36,8 +43,15 @@ export function AuthProvider({ children }) {
     setUser((prev) => ({ ...prev, ...user, isGuest: false }));
   }, []);
 
+  // How this person travels, which ranking honors leg by leg. Kept on the
+  // user so it follows them into every plan instead of being re-answered.
+  const setTravelModes = useCallback(async (modes) => {
+    const { travelModes } = await apiUpdateTravelModes(modes);
+    setUser((prev) => (prev ? { ...prev, travelModes } : prev));
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, signup, logout, upgrade }}>
+    <AuthContext.Provider value={{ user, loading, login, signup, logout, upgrade, setTravelModes }}>
       {children}
     </AuthContext.Provider>
   );

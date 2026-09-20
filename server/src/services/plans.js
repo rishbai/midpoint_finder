@@ -4,6 +4,7 @@ import { geocode, getRoute, pickBestLeg } from './google.js';
 import { rankVenuesForPeople, MAX_PEOPLE } from './meetup.js';
 import { normalizeFilters, getVenue } from './search.js';
 import { describeForQuery } from './describe.js';
+import { normalizeTravelModes, googleTransitTypes, usesWalk, usesDrive, usesTransit } from '../lib/travelModes.js';
 
 function badRequest(message) {
   const err = new Error(message);
@@ -26,9 +27,10 @@ const insertPlan = db.prepare(`
   VALUES (@id, @host_id, @title, @query_text, @filters, @planned_for, 'gathering', @share_token, @created_at)
 `);
 const insertGuestUser = db.prepare(`
-  INSERT INTO users (id, email, password_hash, name, is_guest, friend_invite_token, created_at)
-  VALUES (?, ?, ?, ?, 1, ?, ?)
+  INSERT INTO users (id, email, password_hash, name, is_guest, friend_invite_token, travel_modes, created_at)
+  VALUES (?, ?, ?, ?, 1, ?, ?, ?)
 `);
+const setUserTravelModes = db.prepare('UPDATE users SET travel_modes = ? WHERE id = ?');
 const getPlanByToken = db.prepare('SELECT * FROM plans WHERE share_token = ?');
 const getUserName = db.prepare('SELECT name FROM users WHERE id = ?');
 const insertParticipant = db.prepare(`
@@ -37,7 +39,7 @@ const insertParticipant = db.prepare(`
 const getPlanRow = db.prepare('SELECT * FROM plans WHERE id = ?');
 const getParticipant = db.prepare('SELECT * FROM plan_participants WHERE plan_id = ? AND user_id = ?');
 const listParticipants = db.prepare(`
-  SELECT p.user_id, p.status, p.lat, p.lng, p.address, p.shared_at, u.name,
+  SELECT p.user_id, p.status, p.lat, p.lng, p.address, p.shared_at, u.name, u.travel_modes,
          -- a guest's email is an internal placeholder (see joinPlanByToken), never real
          CASE WHEN u.is_guest THEN NULL ELSE u.email END AS email
   FROM plan_participants p JOIN users u ON u.id = p.user_id
@@ -53,9 +55,22 @@ const setParticipantLocation = db.prepare(`
 `);
 const deletePlanStmt = db.prepare('DELETE FROM plans WHERE id = ? AND host_id = ?');
 const updatePlanStmt = db.prepare(`
-  UPDATE plans SET title = ?, query_text = ?, filters = ?, planned_for = ? WHERE id = ? AND host_id = ?
+  UPDATE plans SET title = ?, query_text = ?, filters = ?, planned_for = ?, resolved_modes = NULL
+  WHERE id = ? AND host_id = ?
 `);
 const deleteParticipant = db.prepare('DELETE FROM plan_participants WHERE plan_id = ? AND user_id = ?');
+const saveResolvedModes = db.prepare('UPDATE plans SET resolved_modes = ? WHERE id = ?');
+
+const VALID_MODES = ['TRANSIT', 'WALK', 'DRIVE'];
+function parseResolvedModes(json) {
+  if (!json) return null;
+  try {
+    const modes = JSON.parse(json).filter((m) => VALID_MODES.includes(m));
+    return modes.length ? modes : null;
+  } catch {
+    return null;
+  }
+}
 
 function requireParticipantOrHost(plan, userId) {
   if (plan.host_id === userId) return;
@@ -110,7 +125,7 @@ export function getPlanPreviewByToken(token) {
 // and gets a lightweight guest account created on the spot (see lib/auth.js
 // signIn — same session mechanism as a real login, so every other plan
 // endpoint works for them unchanged; no password, no email shown anywhere).
-export function joinPlanByToken(token, { userId, name }) {
+export function joinPlanByToken(token, { userId, name, travelModes }) {
   const plan = getPlanByToken.get(token);
   if (!plan) throw notFound("This invite link isn't valid.");
 
@@ -128,9 +143,14 @@ export function joinPlanByToken(token, { userId, name }) {
       placeholderHash,
       cleanName,
       crypto.randomBytes(8).toString('hex'),
+      JSON.stringify(normalizeTravelModes(travelModes)),
       new Date().toISOString()
     );
     isNewGuest = true;
+  } else if (travelModes !== undefined) {
+    // An existing account joining by link can update how they travel on the
+    // way in, rather than joining under a stale preference.
+    setUserTravelModes.run(JSON.stringify(normalizeTravelModes(travelModes)), finalUserId);
   }
 
   const existingCount = db.prepare('SELECT COUNT(*) c FROM plan_participants WHERE plan_id = ?').get(plan.id).c;
@@ -177,6 +197,7 @@ export function getPlan(planId, userId) {
       name: p.name,
       email: p.email,
       status: p.status,
+      travelModes: normalizeTravelModes(p.travel_modes),
       hasLocation: p.lat != null,
       lat: p.lat,
       lng: p.lng,
@@ -279,9 +300,18 @@ export async function computePlanResults(planId, userId) {
     throw badRequest('At least two people need to share their location first.');
   }
 
-  const people = withLocation.map((p) => ({ lat: p.lat, lng: p.lng, userId: p.user_id, name: p.name }));
+  const people = withLocation.map((p) => ({
+    lat: p.lat,
+    lng: p.lng,
+    userId: p.user_id,
+    name: p.name,
+    travelModes: normalizeTravelModes(p.travel_modes),
+  }));
   const filters = JSON.parse(plan.filters);
-  const { center, results, note } = await rankVenuesForPeople(people, filters, plan.planned_for);
+  const { center, results, note, modesUsed } = await rankVenuesForPeople(people, filters, plan.planned_for);
+  // Remember what got priced, so tapping into a venue shows directions in the
+  // same mode the times above were quoted in (see getPlanVenueRoutes).
+  if (modesUsed?.length) saveResolvedModes.run(JSON.stringify(modesUsed), planId);
 
   // Ground each venue's description in what this plan actually asked for
   // ("late happy hour" -> "$5 cocktails until 8pm"), not a generic category line.
@@ -308,22 +338,47 @@ export async function getPlanVenueRoutes(planId, userId, venueId) {
     .all(planId)
     .filter((p) => p.lat != null && p.status !== 'declined');
 
+  // Whether driving got priced is a judgement about the whole shortlist, so
+  // it can't be re-derived from one leg without contradicting the list people
+  // tapped in from — the ranking records it (see computePlanResults).
+  const priced = parseResolvedModes(plan.resolved_modes);
+
   const routes = await Promise.all(
     withLocation.map(async (p) => {
       const origin = { lat: p.lat, lng: p.lng };
       const destination = { lat: venue.lat, lng: venue.lng };
-      const [transit, walk] = await Promise.all([
-        getRoute(origin, destination, { mode: 'TRANSIT', departureTime: plan.planned_for }),
-        getRoute(origin, destination, { mode: 'WALK' }),
-      ]);
-      const best = pickBestLeg(transit?.seconds, walk?.seconds);
-      const winner = best?.mode === 'WALK' ? walk : transit;
+
+      // This person's own modes, narrowed to what the ranking actually
+      // priced, so their directions match the time they tapped.
+      const travelModes = normalizeTravelModes(p.travel_modes);
+      const mine = [
+        usesWalk(travelModes) && 'WALK',
+        usesTransit(travelModes) && 'TRANSIT',
+        usesDrive(travelModes) && 'DRIVE',
+      ].filter(Boolean);
+      const modes = priced ? mine.filter((m) => priced.includes(m)) : mine;
+
+      const fetched = await Promise.all(
+        modes.map((m) =>
+          getRoute(origin, destination, {
+            mode: m,
+            departureTime: plan.planned_for,
+            transitTypes: googleTransitTypes(travelModes),
+          })
+        )
+      );
+      const routeByMode = Object.fromEntries(modes.map((m, i) => [m, fetched[i]]));
+
+      const seconds = Object.fromEntries(
+        Object.entries(routeByMode).map(([m, r]) => [m, r?.seconds ?? null])
+      );
+      const best = pickBestLeg(seconds);
       return {
         userId: p.user_id,
         name: p.name,
         mode: best?.mode || null,
         minutes: best?.seconds != null ? Math.round(best.seconds / 60) : null,
-        steps: winner?.steps || [],
+        steps: (best && routeByMode[best.mode]?.steps) || [],
       };
     })
   );

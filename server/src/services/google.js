@@ -81,16 +81,27 @@ export async function geocode(address) {
 // Below this, walking wins over transit even if transit is a hair faster —
 // nobody wants to wait for a train to go six blocks.
 const WALK_PREFERENCE_SECONDS = 15 * 60;
+// How much slower transit is allowed to be and still beat driving. Someone
+// who takes the subway isn't looking to shave four minutes by driving and
+// then hunting for parking — but they aren't sitting on a bus for 45 minutes
+// to avoid a 12-minute drive either, which is exactly the suburban case.
+const TRANSIT_TOLERANCE = 1.25;
 
-// Picks the better of a transit and a walking leg, in seconds (either may be
-// null if no route was found). Shared by ranking (meetup.js) and on-demand
-// route detail (plans.js) so "which mode wins" is decided the same way in both.
-export function pickBestLeg(transitSeconds, walkSeconds) {
-  if (walkSeconds == null && transitSeconds == null) return null;
-  if (walkSeconds != null && (transitSeconds == null || walkSeconds <= transitSeconds || walkSeconds <= WALK_PREFERENCE_SECONDS)) {
-    return { seconds: walkSeconds, mode: 'WALK' };
+// Picks the best of the legs we have times for: `times` maps mode -> seconds,
+// where a mode may be missing (never asked for) or null (no route found).
+// Shared by ranking (meetup.js) and on-demand route detail (plans.js) so
+// "which mode wins" is decided the same way in both.
+export function pickBestLeg(times) {
+  const options = Object.entries(times || {}).filter(([, s]) => s != null);
+  if (!options.length) return null;
+
+  const { WALK: walk, TRANSIT: transit, DRIVE: drive } = times;
+  if (walk != null && walk <= WALK_PREFERENCE_SECONDS) return { seconds: walk, mode: 'WALK' };
+  if (transit != null && drive != null && transit <= drive * TRANSIT_TOLERANCE) {
+    return { seconds: transit, mode: 'TRANSIT' };
   }
-  return { seconds: transitSeconds, mode: 'TRANSIT' };
+  const [mode, seconds] = options.reduce((best, o) => (o[1] < best[1] ? o : best));
+  return { seconds, mode };
 }
 
 const waypoint = (p) => ({
@@ -100,13 +111,16 @@ const waypoint = (p) => ({
 // Returns matrix[origin][destination] = seconds by the given mode, or null if
 // no route. Matrices are capped at 100 elements (origins x destinations).
 // departureTime only applies to TRANSIT (walking isn't schedule-dependent).
-export async function routeMatrix(origins, destinations, mode, departureTime) {
+// transitTypes restricts which kinds of transit count, for someone who'll
+// take a bus but not the subway (null = no restriction).
+export async function routeMatrix(origins, destinations, mode, departureTime, { transitTypes } = {}) {
   const body = {
     origins: origins.map(waypoint),
     destinations: destinations.map(waypoint),
     travelMode: mode,
   };
   if (mode === 'TRANSIT' && departureTime) body.departureTime = new Date(departureTime).toISOString();
+  if (mode === 'TRANSIT' && transitTypes) body.transitPreferences = { allowedTravelModes: transitTypes };
 
   const res = await fetch('https://routes.googleapis.com/distanceMatrix/v2:computeRouteMatrix', {
     method: 'POST',
@@ -150,13 +164,14 @@ const ROUTE_FIELDS = [
 // The step-by-step version of routeMatrix, for one origin/destination pair —
 // which specific line/bus to take, how many stops, how long each leg is.
 // Used on demand (when someone clicks a venue), not for ranking every candidate.
-export async function getRoute(origin, destination, { mode = 'TRANSIT', departureTime } = {}) {
+export async function getRoute(origin, destination, { mode = 'TRANSIT', departureTime, transitTypes } = {}) {
   const body = {
     origin: { location: { latLng: { latitude: origin.lat, longitude: origin.lng } } },
     destination: { location: { latLng: { latitude: destination.lat, longitude: destination.lng } } },
     travelMode: mode,
   };
   if (mode === 'TRANSIT' && departureTime) body.departureTime = new Date(departureTime).toISOString();
+  if (mode === 'TRANSIT' && transitTypes) body.transitPreferences = { allowedTravelModes: transitTypes };
 
   const res = await fetch('https://routes.googleapis.com/directions/v2:computeRoutes', {
     method: 'POST',

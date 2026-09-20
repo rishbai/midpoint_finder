@@ -22,7 +22,28 @@ const VEHICLES = {
 };
 export const vehicleLabel = (vehicle) => VEHICLES[vehicle] || 'transit';
 
-export const modeIcon = (mode) => (mode === 'WALK' ? '🚶' : mode === 'TRANSIT' ? '🚇' : '');
+const MODE_ICONS = { WALK: '🚶', TRANSIT: '🚇', DRIVE: '🚗' };
+export const modeIcon = (mode) => MODE_ICONS[mode] || '';
+
+// How one person is willing to travel (users.travel_modes on the server).
+// Everyone gets all four by default; you turn off what you won't use.
+export const TRAVEL_MODES = [
+  { value: 'walk', label: 'Walking', icon: '🚶' },
+  { value: 'subway', label: 'Subway & train', icon: '🚇' },
+  { value: 'bus', label: 'Bus', icon: '🚌' },
+  { value: 'drive', label: 'Driving', icon: '🚗' },
+];
+export const ALL_TRAVEL_MODES = TRAVEL_MODES.map((m) => m.value);
+
+// "🚶 🚇" — a compact read of how someone gets around, for a participant row.
+export const travelModeIcons = (modes) =>
+  (modes || []).map((v) => TRAVEL_MODES.find((m) => m.value === v)?.icon).filter(Boolean).join(' ');
+
+// Only worth spelling out when it isn't just "anything" — otherwise it's noise.
+export function travelModeSummary(modes) {
+  if (!modes?.length || modes.length === ALL_TRAVEL_MODES.length) return null;
+  return TRAVEL_MODES.filter((m) => modes.includes(m.value)).map((m) => m.label).join(', ');
+}
 
 // "Sun, Sep 21 · 7:37 PM" — short enough for a card, clear enough on its own.
 export function formatWhen(iso) {
