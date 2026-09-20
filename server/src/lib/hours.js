@@ -48,6 +48,20 @@ export function parseTimeOfDay(text) {
   return hour * 60 + minute;
 }
 
+// The latest moment any of this venue's happy hours is still running, from
+// the JSON in venues.hh_windows (see db.js). Ends past midnight are stored
+// beyond 1440, so this compares directly against a "still on at X" target.
+export function latestHappyHourEnd(windowsJson) {
+  if (!windowsJson) return null;
+  try {
+    const windows = typeof windowsJson === 'string' ? JSON.parse(windowsJson) : windowsJson;
+    if (!Array.isArray(windows) || !windows.length) return null;
+    return Math.max(...windows.map((w) => w.end));
+  } catch {
+    return null;
+  }
+}
+
 export const DAY_NAMES = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 
 export function dayIndex(name) {

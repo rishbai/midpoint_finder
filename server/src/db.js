@@ -116,6 +116,16 @@ if (!venueColumns.includes('hours')) {
   db.exec('ALTER TABLE venues ADD COLUMN hours TEXT');
 }
 
+// When a venue's happy hour actually runs, pulled from review text by the
+// tagger: JSON [{start, end}, ...] in minutes since midnight. Plural because
+// places really do run two — "4-7 PM, plus a late-night happy hour from 10 PM
+// to midnight" — and the late one is the whole point of asking. An end past
+// midnight is stored beyond 1440 so "still on at X" is a plain compare.
+// Google has no API for this, so reviews are the only source and it's often null.
+if (!venueColumns.includes('hh_windows')) {
+  db.exec('ALTER TABLE venues ADD COLUMN hh_windows TEXT');
+}
+
 const userColumns = db.prepare("PRAGMA table_info(users)").all().map((c) => c.name);
 if (!userColumns.includes('is_guest')) {
   db.exec('ALTER TABLE users ADD COLUMN is_guest INTEGER NOT NULL DEFAULT 0');

@@ -10,13 +10,13 @@ const client = new Anthropic(); // reads ANTHROPIC_API_KEY
 
 const clearTags = db.prepare('DELETE FROM venue_tags WHERE venue_id = ?');
 const addTag = db.prepare('INSERT OR IGNORE INTO venue_tags (venue_id, kind, tag) VALUES (?, ?, ?)');
-const markTagged = db.prepare('UPDATE venues SET tagged_at = ? WHERE id = ?');
+const markTagged = db.prepare('UPDATE venues SET tagged_at = ?, hh_windows = ? WHERE id = ?');
 
-const saveTags = db.transaction((id, vibes, dishes) => {
+const saveTags = db.transaction((id, vibes, dishes, windows) => {
   clearTags.run(id);
   vibes.forEach((t) => addTag.run(id, 'vibe', t));
   dishes.forEach((t) => addTag.run(id, 'dish', t));
-  markTagged.run(new Date().toISOString(), id);
+  markTagged.run(new Date().toISOString(), windows?.length ? JSON.stringify(windows) : null, id);
 });
 
 function buildPrompt(v) {
@@ -26,16 +26,41 @@ function buildPrompt(v) {
 Reviews:
 ${reviews}
 
-Return JSON: {"vibes": [...], "dishes": [...]}
+Return JSON: {"vibes": [...], "dishes": [...], "happyHourWindows": [{"start": <minutes|null>, "end": <minutes>}, ...]}
 - vibes: only from this list, and only when the reviews clearly support it: ${VIBES.join(', ')}
-- dishes: specific dishes or drinks reviewers praise, lowercase and short (e.g. "cacio e pepe"). Max 8. Empty list if none.`;
+- dishes: specific dishes or drinks reviewers praise, lowercase and short (e.g. "cacio e pepe"). Max 8. Empty list if none.
+- happyHourWindows: every distinct happy hour the reviews give actual hours for. Minutes since midnight: 4pm = 960, 7pm = 1140, 10pm = 1320, midnight = 1440, 2am = 1560.
+  - "happy hour 4-7pm" -> [{"start": 960, "end": 1140}]
+  - "hours are 4-7 PM, plus a late-night happy hour from 10 PM to midnight" -> [{"start": 960, "end": 1140}, {"start": 1320, "end": 1440}] — list BOTH; a second, later window is important, never drop it
+  - "happy hour until 8" (evening implied) -> [{"start": null, "end": 1200}]
+  - reviews mention a happy hour but never say when -> [] (don't guess typical hours)`;
 }
+
+// Minutes since midnight, with an end past midnight pushed beyond 1440 so
+// "still on at X" stays a plain numeric compare.
+function cleanWindows(raw) {
+  if (!Array.isArray(raw)) return [];
+  const n = (x) => (typeof x === 'number' && x >= 0 && x <= 1680 ? Math.round(x) : null);
+  return raw
+    .map((w) => {
+      if (!w || typeof w !== 'object') return null;
+      const start = n(w.start);
+      let end = n(w.end);
+      if (end == null) return null; // an end time is the whole point here
+      if (start != null && end <= start) end += 1440; // crossed midnight
+      return { start, end };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.end - b.end)
+    .slice(0, 3);
+}
+
 
 // v needs: id, name, category, cuisine, reviews (JSON string).
 export async function tagVenueRow(v) {
   const msg = await client.messages.create({
     model: TAG_MODEL,
-    max_tokens: 300,
+    max_tokens: 400,
     system: 'You extract tags from venue reviews. Reply with JSON only. No prose, no code fences.',
     messages: [{ role: 'user', content: buildPrompt(v) }],
   });
@@ -48,9 +73,11 @@ export async function tagVenueRow(v) {
     .map((d) => d.toLowerCase().trim())
     .filter(Boolean)
     .slice(0, 8);
+  // Only meaningful alongside the vibe — a window without a happy hour is noise.
+  const happyHourWindows = vibes.includes('happy_hour') ? cleanWindows(parsed.happyHourWindows) : [];
 
-  saveTags(v.id, vibes, dishes);
-  return { vibes, dishes };
+  saveTags(v.id, vibes, dishes, happyHourWindows);
+  return { vibes, dishes, happyHourWindows };
 }
 
 // Tags a batch of rows a handful at a time. onProgress, if given, fires after

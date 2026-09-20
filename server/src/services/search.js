@@ -1,5 +1,5 @@
 import { db } from '../db.js';
-import { isOpenAt, dayAndMinutesAt } from '../lib/hours.js';
+import { isOpenAt, dayAndMinutesAt, latestHappyHourEnd } from '../lib/hours.js';
 
 const M_PER_DEG_LAT = 111320;
 
@@ -38,6 +38,10 @@ export function normalizeFilters(raw = {}) {
     openDay: raw.openDay !== undefined && raw.openDay !== '' ? Number(raw.openDay) : undefined,
     openMinutes: num(raw.openMinutes),
     openNow: raw.openNow === true || raw.openNow === 'true',
+    // "happy hour that goes late": the deal must still be on at this
+    // minute-of-day, which is a different thing from the venue being open
+    // then. Ranks rather than filters — see searchVenues.
+    happyHourUntil: num(raw.happyHourUntil),
   };
 }
 
@@ -84,7 +88,7 @@ export function searchVenues(f) {
 
   const rows = db.prepare(`
     SELECT v.id, v.name, v.address, v.lat, v.lng, v.category, v.cuisine,
-           v.price_level, v.rating, v.rating_count, v.hours,
+           v.price_level, v.rating, v.rating_count, v.hours, v.hh_windows,
            (SELECT group_concat(tag) FROM venue_tags t WHERE t.venue_id = v.id AND t.kind = 'vibe') AS vibes,
            (SELECT group_concat(tag) FROM venue_tags t WHERE t.venue_id = v.id AND t.kind = 'dish') AS dishes
     FROM venues v
@@ -121,11 +125,23 @@ export function searchVenues(f) {
       .filter((r) => r.distance <= radius);
   }
 
-  results.sort(
-    f.sort === 'distance' && near
-      ? (a, b) => a.distance - b.distance
-      : (a, b) => qualityScore(b) - qualityScore(a)
-  );
+  const byRelevance = f.sort === 'distance' && near
+    ? (a, b) => a.distance - b.distance
+    : (a, b) => qualityScore(b) - qualityScore(a);
+
+  if (f.happyHourUntil !== undefined) {
+    // Google publishes no happy-hour hours, so this only exists where a
+    // review happened to say it — roughly one venue in six. Ranking rather
+    // than filtering keeps the rest visible instead of emptying the page:
+    // confirmed-runs-late first, then everything else by the usual order.
+    const runsLate = (v) => {
+      const end = latestHappyHourEnd(v.hh_windows);
+      return end != null && end >= f.happyHourUntil ? 1 : 0;
+    };
+    results.sort((a, b) => runsLate(b) - runsLate(a) || byRelevance(a, b));
+  } else {
+    results.sort(byRelevance);
+  }
 
   return results.slice(0, f.limit);
 }
