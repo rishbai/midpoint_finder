@@ -31,7 +31,11 @@ const CLOSE_ENOUGH_METERS = 2000;
 async function findCandidates(filters, center) {
   let candidates = searchVenues({ ...filters, lat: center.lat, lng: center.lng, radius: SEARCH_RADII[0], sort: 'best', limit: 200 });
   if (candidates.length < MIN_CANDIDATES) {
-    await ensureCoverage(center).catch((err) => console.warn('Live coverage sweep failed:', err.message));
+    // Pass the cuisine along: a generic sweep won't bring in Indian places
+    // for an "indian food" ask, but a targeted one will (see liveIngest.js).
+    await ensureCoverage(center, { cuisine: filters.cuisine }).catch((err) =>
+      console.warn('Live coverage sweep failed:', err.message)
+    );
   }
   for (const radius of SEARCH_RADII) {
     candidates = searchVenues({ ...filters, lat: center.lat, lng: center.lng, radius, sort: 'best', limit: 200 });
