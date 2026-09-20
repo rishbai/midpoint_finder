@@ -70,6 +70,16 @@ export async function geocode(address) {
     throw err;
   }
   const r = data.results[0];
+  // Because the search is pinned to country:US, Google answers gibberish with
+  // a match on the country itself — "United States", at the geographic center
+  // of Colorado. Silently accepting that puts someone 1,500 miles from where
+  // they actually are and drags the whole group's midpoint with them, so a
+  // match this coarse is a failure, not a location.
+  if (r.types?.some((t) => TOO_COARSE_TO_START_FROM.includes(t))) {
+    const err = new Error(`"${address}" isn't specific enough. Try a city, neighborhood, or full address.`);
+    err.status = 400;
+    throw err;
+  }
   return {
     input: address,
     address: r.formatted_address,
@@ -77,6 +87,9 @@ export async function geocode(address) {
     lng: r.geometry.location.lng,
   };
 }
+
+// A whole country or state is never a usable "where I'm coming from".
+const TOO_COARSE_TO_START_FROM = ['country', 'administrative_area_level_1'];
 
 // Below this, walking wins over transit even if transit is a hair faster —
 // nobody wants to wait for a train to go six blocks.

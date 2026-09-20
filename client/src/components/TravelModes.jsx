@@ -17,7 +17,7 @@ export default function TravelModes({ value, onChange, disabled }) {
   }
 
   return (
-    <div className="mode-picker">
+    <span className="mode-picker">
       {TRAVEL_MODES.map((m) => (
         <button
           key={m.value}
@@ -31,6 +31,6 @@ export default function TravelModes({ value, onChange, disabled }) {
           {m.label}
         </button>
       ))}
-    </div>
+    </span>
   );
 }

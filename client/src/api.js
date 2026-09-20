@@ -76,6 +76,19 @@ export const updatePlan = (id, body) =>
   });
 export const deletePlan = (id) => request(`/api/plans/${id}`, { method: 'DELETE' });
 export const invitePlan = (id, friendIds) => postJson(`/api/plans/${id}/invite`, { friendIds });
+
+// Adds someone with no account: the host supplies a name and where they're
+// coming from, and they count in the ranking like anyone else.
+export const addPersonToPlan = (id, person) => postJson(`/api/plans/${id}/people`, person);
+
+// How one person travels for THIS plan — the same person can take the subway
+// at home and drive when they're visiting family.
+export const setPlanTravelModes = (id, userId, travelModes) =>
+  request(`/api/plans/${id}/participants/${userId}/travel-modes`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ travelModes }),
+  });
 export const leavePlan = (id) => request(`/api/plans/${id}/leave`, { method: 'POST' });
 export const respondToPlan = (id, action) => postJson(`/api/plans/${id}/respond`, { action });
 export const sharePlanLocation = (id, body) => postJson(`/api/plans/${id}/location`, body);

@@ -90,9 +90,10 @@ function TravelSettings() {
       </button>
       {open && (
         <div className="travel-popover">
-          <span className="form-label">How do you get around?</span>
+          <span className="form-label">How do you usually get around?</span>
           <span className="form-hint">
-            Used for your travel times in every plan. Turn off anything you'd rather not take.
+            The starting point for plans you join. You can change it per plan — take the subway at
+            home, drive when you're visiting.
           </span>
           <TravelModes value={user.travelModes} onChange={change} />
           {error && <p className="notice">{error}</p>}

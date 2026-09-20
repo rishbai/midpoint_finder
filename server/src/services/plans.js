@@ -36,10 +36,21 @@ const getUserName = db.prepare('SELECT name FROM users WHERE id = ?');
 const insertParticipant = db.prepare(`
   INSERT INTO plan_participants (plan_id, user_id, status) VALUES (?, ?, ?)
 `);
+const insertPlacedParticipant = db.prepare(`
+  INSERT INTO plan_participants (plan_id, user_id, status, lat, lng, address, shared_at, travel_modes, added_by_host)
+  VALUES (?, ?, 'joined', ?, ?, ?, ?, ?, 1)
+`);
+const setParticipantTravelModesStmt = db.prepare(
+  'UPDATE plan_participants SET travel_modes = ? WHERE plan_id = ? AND user_id = ?'
+);
 const getPlanRow = db.prepare('SELECT * FROM plans WHERE id = ?');
 const getParticipant = db.prepare('SELECT * FROM plan_participants WHERE plan_id = ? AND user_id = ?');
 const listParticipants = db.prepare(`
-  SELECT p.user_id, p.status, p.lat, p.lng, p.address, p.shared_at, u.name, u.travel_modes,
+  SELECT p.user_id, p.status, p.lat, p.lng, p.address, p.shared_at, p.added_by_host,
+         u.name,
+         -- Per-plan preference wins; NULL falls back to the account default.
+         COALESCE(p.travel_modes, u.travel_modes) AS travel_modes,
+         p.travel_modes IS NOT NULL AS travel_modes_set,
          -- a guest's email is an internal placeholder (see joinPlanByToken), never real
          CASE WHEN u.is_guest THEN NULL ELSE u.email END AS email
   FROM plan_participants p JOIN users u ON u.id = p.user_id
@@ -60,6 +71,7 @@ const updatePlanStmt = db.prepare(`
 `);
 const deleteParticipant = db.prepare('DELETE FROM plan_participants WHERE plan_id = ? AND user_id = ?');
 const saveResolvedModes = db.prepare('UPDATE plans SET resolved_modes = ? WHERE id = ?');
+const clearResolvedModes = db.prepare('UPDATE plans SET resolved_modes = NULL WHERE id = ?');
 
 const VALID_MODES = ['TRANSIT', 'WALK', 'DRIVE'];
 function parseResolvedModes(json) {
@@ -147,10 +159,6 @@ export function joinPlanByToken(token, { userId, name, travelModes }) {
       new Date().toISOString()
     );
     isNewGuest = true;
-  } else if (travelModes !== undefined) {
-    // An existing account joining by link can update how they travel on the
-    // way in, rather than joining under a stale preference.
-    setUserTravelModes.run(JSON.stringify(normalizeTravelModes(travelModes)), finalUserId);
   }
 
   const existingCount = db.prepare('SELECT COUNT(*) c FROM plan_participants WHERE plan_id = ?').get(plan.id).c;
@@ -158,6 +166,14 @@ export function joinPlanByToken(token, { userId, name, travelModes }) {
   if (!alreadyIn) {
     if (existingCount >= MAX_PEOPLE) throw badRequest(`This plan already has ${MAX_PEOPLE} people.`);
     insertParticipant.run(plan.id, finalUserId, 'joined');
+  }
+  // The answer given on the way in is about this trip, so it's stored on the
+  // participation. A brand-new guest has no account default yet, so seed that
+  // too and their next plan starts from the same sensible place.
+  if (travelModes !== undefined) {
+    const modes = JSON.stringify(normalizeTravelModes(travelModes));
+    setParticipantTravelModesStmt.run(modes, plan.id, finalUserId);
+    if (isNewGuest) setUserTravelModes.run(modes, finalUserId);
   }
 
   return { userId: finalUserId, isNewGuest, plan: getPlan(plan.id, finalUserId) };
@@ -198,6 +214,9 @@ export function getPlan(planId, userId) {
       email: p.email,
       status: p.status,
       travelModes: normalizeTravelModes(p.travel_modes),
+      // Whether they've said so for *this* plan, or we're showing their default.
+      travelModesSet: !!p.travel_modes_set,
+      addedByHost: !!p.added_by_host,
       hasLocation: p.lat != null,
       lat: p.lat,
       lng: p.lng,
@@ -205,6 +224,74 @@ export function getPlan(planId, userId) {
       sharedAt: p.shared_at,
     })),
   };
+}
+
+// How one person is travelling for this plan specifically. Stored on the
+// participation, not the account: the same person takes the subway at home
+// and drives when they're visiting family, and neither answer is wrong.
+export function setParticipantTravelModes(planId, actorId, targetUserId, travelModes) {
+  const plan = getPlanRow.get(planId);
+  if (!plan) throw notFound('Plan not found.');
+  requireParticipantOrHost(plan, actorId);
+
+  const target = getParticipant.get(planId, targetUserId);
+  if (!target) throw notFound("That person isn't on this plan.");
+  // Your own, always. The host also keeps the details of the people they
+  // added by address, since those people have no account to do it themselves.
+  const mine = actorId === targetUserId;
+  const hostManaging = plan.host_id === actorId && target.added_by_host;
+  if (!mine && !hostManaging) throw forbidden("You can only change how you're getting there.");
+
+  setParticipantTravelModesStmt.run(JSON.stringify(normalizeTravelModes(travelModes)), planId, targetUserId);
+  clearResolvedModes.run(planId); // times were priced under the old preference
+  return getPlan(planId, actorId);
+}
+
+// Adds someone who isn't signing up for anything: the host types a name and
+// where they're coming from, and they count in the ranking like everyone
+// else. They get a placeholder account purely so the rest of the app has a
+// person to hang a row on — no password, no email, no way to log in as them.
+export async function addPersonByAddress(planId, hostId, { name, address, travelModes }) {
+  const plan = getPlanRow.get(planId);
+  if (!plan) throw notFound('Plan not found.');
+  if (plan.host_id !== hostId) throw forbidden('Only the host can add people to this plan.');
+
+  const cleanName = String(name || '').trim();
+  const cleanAddress = String(address || '').trim();
+  if (!cleanName) throw badRequest('Give this person a name.');
+  if (!cleanAddress) throw badRequest('Add where they\'re coming from.');
+
+  const count = db.prepare('SELECT COUNT(*) c FROM plan_participants WHERE plan_id = ?').get(planId).c;
+  if (count >= MAX_PEOPLE) throw badRequest(`This plan already has ${MAX_PEOPLE} people.`);
+
+  // Geocode before writing anything, so a bad address fails cleanly rather
+  // than leaving a placeholder account behind with nowhere to travel from.
+  const located = await geocode(cleanAddress);
+
+  const userId = crypto.randomUUID();
+  db.transaction(() => {
+    insertGuestUser.run(
+      userId,
+      `guest-${userId}@guest.midpoint.local`,
+      crypto.randomBytes(32).toString('hex'), // never given out; can't be used to log in
+      cleanName,
+      crypto.randomBytes(8).toString('hex'),
+      JSON.stringify(normalizeTravelModes(travelModes)),
+      new Date().toISOString()
+    );
+    insertPlacedParticipant.run(
+      planId,
+      userId,
+      located.lat,
+      located.lng,
+      located.address || cleanAddress,
+      new Date().toISOString(),
+      JSON.stringify(normalizeTravelModes(travelModes))
+    );
+  })();
+  clearResolvedModes.run(planId);
+
+  return getPlan(planId, hostId);
 }
 
 export function updatePlan(planId, userId, { title, queryText, filters, plannedFor }) {

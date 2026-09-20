@@ -5,6 +5,8 @@ import {
   listPlansForUser,
   getPlan,
   updatePlan,
+  addPersonByAddress,
+  setParticipantTravelModes,
   deletePlan,
   inviteToPlan,
   leavePlan,
@@ -99,6 +101,34 @@ plansRouter.delete('/plans/:id', requireAuth, (req, res, next) => {
 plansRouter.post('/plans/:id/invite', requireAuth, (req, res, next) => {
   try {
     const plan = inviteToPlan(req.params.id, req.user.id, req.body?.friendIds || []);
+    res.json({ plan });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Someone who isn't signing up for anything: the host supplies a name and
+// where they're coming from, and they count in the ranking like anyone else.
+plansRouter.post('/plans/:id/people', requireAuth, async (req, res, next) => {
+  try {
+    const { name, address, travelModes } = req.body || {};
+    const plan = await addPersonByAddress(req.params.id, req.user.id, { name, address, travelModes });
+    res.status(201).json({ plan });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// How one person is getting there *for this plan* — theirs to set, or the
+// host's for the people they added by address.
+plansRouter.put('/plans/:id/participants/:userId/travel-modes', requireAuth, (req, res, next) => {
+  try {
+    const plan = setParticipantTravelModes(
+      req.params.id,
+      req.user.id,
+      req.params.userId,
+      req.body?.travelModes
+    );
     res.json({ plan });
   } catch (err) {
     next(err);

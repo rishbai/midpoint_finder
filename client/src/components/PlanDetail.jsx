@@ -4,6 +4,8 @@ import {
   updatePlan,
   deletePlan,
   invitePlan,
+  addPersonToPlan,
+  setPlanTravelModes,
   leavePlan,
   respondToPlan,
   sharePlanLocation,
@@ -12,13 +14,22 @@ import {
   getFriends,
 } from '../api.js';
 import { useAuth } from '../auth.jsx';
-import { modeIcon, vehicleLabel, formatWhen, initial, travelModeIcons, travelModeSummary } from '../format.js';
+import {
+  modeIcon,
+  vehicleLabel,
+  formatWhen,
+  initial,
+  travelModeIcons,
+  travelModeSummary,
+  ALL_TRAVEL_MODES,
+} from '../format.js';
 import Avatar from './Avatar.jsx';
 import InviteLinkBox from './InviteLinkBox.jsx';
 import PlanForm from './PlanForm.jsx';
 import PlanMap from './PlanMap.jsx';
 import RouteMap from './RouteMap.jsx';
 import VenueCard from './VenueCard.jsx';
+import TravelModes from './TravelModes.jsx';
 
 function participantStatus(p) {
   if (p.status === 'declined') return { kind: 'muted', text: 'Declined' };
@@ -98,6 +109,108 @@ function InvitePanel({ plan, onInvited, onClose }) {
         </button>
       </div>
     </div>
+  );
+}
+
+// Someone who isn't signing up for anything — the host gives a name and
+// where they're coming from. Useful for family: half of them will never make
+// an account, but they still have to count in "fair for everyone".
+function AddPersonPanel({ onAdd, onClose }) {
+  const [name, setName] = useState('');
+  const [address, setAddress] = useState('');
+  const [travelModes, setTravelModes] = useState(ALL_TRAVEL_MODES);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  async function submit(e) {
+    e.preventDefault();
+    setBusy(true);
+    setError('');
+    try {
+      await onAdd({ name: name.trim(), address: address.trim(), travelModes });
+      onClose();
+    } catch (err) {
+      setError(err.message);
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form className="card" onSubmit={submit}>
+      <p className="card-title">Add someone without an account</p>
+      <label>
+        <span className="form-label">Their name</span>
+        <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Mom" required autoFocus />
+      </label>
+      <label>
+        <span className="form-label">Where they're coming from</span>
+        <input
+          type="text"
+          value={address}
+          onChange={(e) => setAddress(e.target.value)}
+          placeholder="Cary, NC"
+          required
+        />
+      </label>
+      <div className="form-section">
+        <span className="form-label">How they'll get there</span>
+        <TravelModes value={travelModes} onChange={setTravelModes} />
+      </div>
+      {error && <p className="notice">{error}</p>}
+      <div className="people-actions">
+        <button type="button" className="link" onClick={onClose}>Cancel</button>
+        <button type="submit" className="primary" disabled={busy || !name.trim() || !address.trim()}>
+          {busy ? 'Adding' : 'Add to plan'}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+// One person's modes for THIS plan. The same person takes the subway at home
+// and drives when they're visiting family, so this is deliberately separate
+// from the account default they started with.
+function ParticipantTravel({ person, canEdit, onChange }) {
+  const [open, setOpen] = useState(false);
+  const [error, setError] = useState('');
+
+  const icons = travelModeIcons(person.travelModes);
+  if (!canEdit) {
+    return travelModeSummary(person.travelModes) ? (
+      <span className="muted small" title={travelModeSummary(person.travelModes)}>{icons}</span>
+    ) : null;
+  }
+
+  async function change(modes) {
+    setError('');
+    try {
+      await onChange(modes);
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  return (
+    <span className="participant-travel">
+      <button
+        type="button"
+        className="link"
+        aria-expanded={open}
+        title={travelModeSummary(person.travelModes) || 'Any way of getting there'}
+        onClick={() => setOpen(!open)}
+      >
+        {icons}
+      </button>
+      {open && (
+        <span className="travel-popover">
+          <span className="form-label">How {person.isMe ? 'are you' : `is ${person.name}`} getting there?</span>
+          <span className="form-hint">Just for this plan — it won't change other plans.</span>
+          <TravelModes value={person.travelModes} onChange={change} />
+          {error && <span className="notice">{error}</span>}
+          <button type="button" className="link" onClick={() => setOpen(false)}>Done</button>
+        </span>
+      )}
+    </span>
   );
 }
 
@@ -190,6 +303,7 @@ export default function PlanDetail({ id, onBack }) {
   const [resultsError, setResultsError] = useState('');
   const [loadingResults, setLoadingResults] = useState(false);
   const [inviting, setInviting] = useState(false);
+  const [addingPerson, setAddingPerson] = useState(false);
   const [showLink, setShowLink] = useState(false);
 
   const refresh = useCallback(
@@ -398,6 +512,9 @@ export default function PlanDetail({ id, onBack }) {
             {isHost && !inviting && (
               <button type="button" className="ghost" onClick={() => setInviting(true)}>+ Invite friends</button>
             )}
+            {isHost && !addingPerson && (
+              <button type="button" className="ghost" onClick={() => setAddingPerson(true)}>+ Add by address</button>
+            )}
             <button type="button" className="ghost" onClick={() => setShowLink((v) => !v)}>
               {showLink ? 'Hide link' : 'Share link'}
             </button>
@@ -413,11 +530,15 @@ export default function PlanDetail({ id, onBack }) {
                 <span className="person-name">
                   {p.name}
                   {p.userId === plan.hostId && <span className="muted small">host</span>}
-                  {travelModeSummary(p.travelModes) && (
-                    <span className="muted small" title={travelModeSummary(p.travelModes)}>
-                      {travelModeIcons(p.travelModes)}
-                    </span>
-                  )}
+                  <ParticipantTravel
+                    person={{ ...p, isMe: p.userId === user.id }}
+                    canEdit={p.userId === user.id || (isHost && p.addedByHost)}
+                    onChange={async (modes) => {
+                      const { plan: updated } = await setPlanTravelModes(id, p.userId, modes);
+                      setPlan(updated);
+                      setResults(null); // times were priced under the old preference
+                    }}
+                  />
                 </span>
                 <span className={`status-chip status-${status.kind}`}>{status.text}</span>
               </li>
@@ -435,6 +556,16 @@ export default function PlanDetail({ id, onBack }) {
             plan={plan}
             onInvited={(ids) => invitePlan(id, ids).then((d) => setPlan(d.plan))}
             onClose={() => setInviting(false)}
+          />
+        )}
+        {addingPerson && (
+          <AddPersonPanel
+            onAdd={async (person) => {
+              const { plan: updated } = await addPersonToPlan(id, person);
+              setPlan(updated);
+              setResults(null);
+            }}
+            onClose={() => setAddingPerson(false)}
           />
         )}
       </Section>

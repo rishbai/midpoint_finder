@@ -96,6 +96,13 @@ db.exec(`
     lng        REAL,
     address    TEXT,               -- reverse-geocoded or typed fallback label
     shared_at  TEXT,
+    -- How this person travels *for this plan*: at home they take the subway,
+    -- visiting family they drive. NULL falls back to their account default
+    -- (users.travel_modes), so nobody has to answer twice.
+    travel_modes TEXT,
+    -- Added by the host from just a name and address, with no account of
+    -- their own — so the host is the one who maintains their details.
+    added_by_host INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (plan_id, user_id)
   );
   CREATE INDEX IF NOT EXISTS idx_plan_participants_user ON plan_participants(user_id, status);
@@ -148,6 +155,14 @@ if (untokenedUsers.length) {
   })();
 }
 db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_friend_invite_token ON users(friend_invite_token)');
+
+const participantColumns = db.prepare('PRAGMA table_info(plan_participants)').all().map((c) => c.name);
+if (!participantColumns.includes('travel_modes')) {
+  db.exec('ALTER TABLE plan_participants ADD COLUMN travel_modes TEXT');
+}
+if (!participantColumns.includes('added_by_host')) {
+  db.exec('ALTER TABLE plan_participants ADD COLUMN added_by_host INTEGER NOT NULL DEFAULT 0');
+}
 
 const planColumns = db.prepare("PRAGMA table_info(plans)").all().map((c) => c.name);
 if (!planColumns.includes('share_token')) {

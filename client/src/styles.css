@@ -418,7 +418,8 @@ legend { font-size: 0.875rem; font-weight: 700; margin-bottom: 0.4rem; padding: 
 .mode-chip[aria-pressed='true'] { background: var(--black); border-color: var(--black); color: var(--white); }
 .mode-chip:disabled { opacity: 0.5; cursor: default; }
 
-.travel-settings { position: relative; }
+.travel-settings, .participant-travel { position: relative; }
+.participant-travel > .link { font-size: 0.9rem; }
 .travel-popover {
   position: absolute;
   top: calc(100% + 0.5rem);
@@ -435,6 +436,8 @@ legend { font-size: 0.875rem; font-weight: 700; margin-bottom: 0.4rem; padding: 
   box-shadow: 0 8px 28px rgb(0 0 0 / 12%);
   text-align: left;
 }
+/* Anchored to the row inside a list, where there's no room on the right. */
+.participant-travel .travel-popover { right: auto; left: 0; }
 
 .avatar-lg { width: 2.6rem; height: 2.6rem; font-size: 1rem; }
 .avatar-stack { display: inline-flex; align-items: center; }
