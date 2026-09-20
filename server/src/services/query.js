@@ -1,5 +1,6 @@
-// Turns a free-text ask ("happy hour that goes past 7pm", "quiet coffee shop
-// to work from this afternoon") into the structured filters search.js expects.
+// Turns a free-text ask ("good Indian food, open past 9pm", "quiet coffee
+// shop to work from this afternoon") into the structured filters search.js
+// expects.
 import Anthropic from '@anthropic-ai/sdk';
 import { CATEGORY_TYPES, VIBES } from '../lib/vocab.js';
 import { listCuisines, normalizeFilters } from './search.js';
@@ -20,20 +21,20 @@ Schema (omit any key you have no evidence for):
   "category": one of ${JSON.stringify(Object.keys(CATEGORY_TYPES).concat('other'))},
   "cuisine": lowercase cuisine word, e.g. "italian", "japanese" (omit if not a restaurant ask),
   "vibes": array, only from ${JSON.stringify(VIBES)},
-  "dish": a specific dish or drink mentioned, lowercase (e.g. "espresso tonic"),
+  "dish": a specific dish or order mentioned, lowercase (e.g. "espresso tonic"),
   "minPrice": 1-4,
   "maxPrice": 1-4,
   "minRating": number like 4.5,
   "openDay": integer 0-6 (0=Sunday..6=Saturday), only if a specific day is implied,
   "openMinutes": integer minutes since midnight, the time the place must still be open at,
-  "happyHourUntil": integer minutes since midnight — use ONLY for happy hour that runs late,
+  "dealsUntil": integer minutes since midnight — use ONLY for a discount window that runs late,
   "q": free-text venue name if they named a specific place
 }
 
 Rules:
-- "happy hour" implies vibes: ["happy_hour"].
-- When the ask is about the happy hour itself running late or until some time ("happy hour that goes late", "late happy hour", "deals going late", "happy hour past 9"), set happyHourUntil to that time (bare "late" -> 1260, i.e. 9pm) and do NOT set openDay/openMinutes. Those two are about the venue's own closing time, which is a different question — a bar open till 4am whose happy hour ended at 6pm is exactly what this person doesn't want.
-- "drinks"/"cocktails"/"beer"/"wine"/"a bar"/"happy hour", when no specific food dish is also named, imply category: "bar". Don't let this get dropped just because no other bar-specific word is present — it's what keeps "cheap drinks" from matching a bagel shop.
+- A request about discounted hours ("happy hour", "specials") implies vibes: ["happy_hour"].
+- When the ask is about that discount window itself running late ("deals going late", "specials past 9"), set dealsUntil to that time (bare "late" -> 1260, i.e. 9pm) and do NOT set openDay/openMinutes. Those two are about the venue's own closing time, which is a different question — a place open till 4am whose discount ended at 6pm is exactly what this person doesn't want.
+- Words for a venue that serves mainly drinks, when no specific food dish is also named, imply category: "bar". Don't let this get dropped just because no other word for that category is present — it's what keeps such a request from matching a bagel shop.
 - "coffee"/"a cafe"/"to work from" imply category: "cafe".
 - Plain praise with nothing else specific ("good food", "great food", "amazing food", "quality food") implies category: "restaurant" and minRating: 4.5. Don't leave a request like this with no filters at all — "good" specifically means a rating floor, not "anything." Without it, a search just ranks by review volume, which rewards busy tourist/arcade spots over actual food quality.
 - openMinutes = hour*60 + minute, using a 24-hour hour. Convert carefully: 7pm = 19:00 = 19*60 = 1140. 11pm = 23:00 = 1380. 9am = 9:00 = 540.
@@ -43,8 +44,8 @@ Rules:
 - Price words, using Google's actual tiers (1=Inexpensive, 2=Moderate, 3=Expensive, 4=Very Expensive): "cheap"/"budget"/"inexpensive" -> maxPrice 1 (not 2 — moderate is not cheap). "affordable"/"reasonable" -> maxPrice 2. "upscale"/"fancy"/"nice" -> minPrice 3, and add vibe "upscale".
 - Only include a key when the request actually supports it. It's fine to return {}.
 
-Example: "happy hour that goes past 7pm" with today = ${DAY_NAMES[today.day]} (index ${today.day}) ->
-{"vibes": ["happy_hour"], "openDay": ${today.day}, "openMinutes": 1140}`;
+Example: "somewhere still open past 7pm" with today = ${DAY_NAMES[today.day]} (index ${today.day}) ->
+{"openDay": ${today.day}, "openMinutes": 1140}`;
 }
 
 export async function parseQuery(text, referenceTime) {

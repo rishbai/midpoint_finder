@@ -3,8 +3,8 @@
 // (services/meetup.js), against your local database.
 //
 //   npm run meetup -- --at "Astor Place, New York, NY" --at "Union Square, New York, NY"
-//   npm run meetup -- --at "Jersey City, NJ" --at "Williamsburg, Brooklyn" --q "cheap drinks and good deals"
-//   npm run meetup -- --at "..." --at "..." --category=bar --maxPrice=1
+//   npm run meetup -- --at "Jersey City, NJ" --at "Williamsburg, Brooklyn" --q "cheap eats, open late"
+//   npm run meetup -- --at "..." --at "..." --category=restaurant --maxPrice=1
 //   npm run meetup -- --at "Cary, NC" --at "Apex, NC" --q "mexican food" --modes=drive
 //   --modes applies to everyone; --modes1/--modes2/... set one person each, so you can
 //   model a real group: --modes1=walk,bus --modes2=drive
@@ -32,7 +32,7 @@ for (let i = 0; i < argv.length; i++) {
 
 if (addresses.length < 2 || addresses.length > MAX_PEOPLE) {
   console.log(`Usage:
-  npm run meetup -- --at "<address>" --at "<address>" [--q "<free text>"] [--category=bar] [--maxPrice=2] [--vibes=happy_hour] [--departure="2026-09-20T19:00:00"] [--modes=walk,subway,bus,drive] ...
+  npm run meetup -- --at "<address>" --at "<address>" [--q "<free text>"] [--category=cafe] [--maxPrice=2] [--vibes=cozy] [--departure="2026-09-20T19:00:00"] [--modes=walk,subway,bus,drive] ...
 
 Needs 2-${MAX_PEOPLE} --at addresses. --q parses free text the same way the "Ask"/"Describe it" boxes do;
 without --q, any other --flag is passed straight through as a structured filter. --departure sets when

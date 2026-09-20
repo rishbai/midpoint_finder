@@ -401,7 +401,7 @@ export async function computePlanResults(planId, userId) {
   if (modesUsed?.length) saveResolvedModes.run(JSON.stringify(modesUsed), planId);
 
   // Ground each venue's description in what this plan actually asked for
-  // ("late happy hour" -> "$5 cocktails until 8pm"), not a generic category line.
+  // ("a quiet spot to work" -> "outlets at every table"), not a generic category line.
   const descriptions = await describeForQuery(plan.query_text, results.map((r) => r.venue));
   const described = results.map((r) => ({
     ...r,

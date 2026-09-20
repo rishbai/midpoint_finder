@@ -37,7 +37,7 @@ export const searchVenues = (filters) => request(`/api/venues?${toQuery(filters)
 
 export const findMeetup = (addresses, filters) => postJson('/api/meetup', { addresses, filters });
 
-// Turns free text ("happy hour that goes past 7pm") into structured filters.
+// Turns free text ("good Indian food, open past 9pm") into structured filters.
 export const parseQuery = (q) => postJson('/api/query', { q });
 
 // Auth

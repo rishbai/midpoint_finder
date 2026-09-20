@@ -26,14 +26,14 @@ function buildPrompt(v) {
 Reviews:
 ${reviews}
 
-Return JSON: {"vibes": [...], "dishes": [...], "happyHourWindows": [{"start": <minutes|null>, "end": <minutes>}, ...]}
+Return JSON: {"vibes": [...], "dishes": [...], "dealWindows": [{"start": <minutes|null>, "end": <minutes>}, ...]}
 - vibes: only from this list, and only when the reviews clearly support it: ${VIBES.join(', ')}
-- dishes: specific dishes or drinks reviewers praise, lowercase and short (e.g. "cacio e pepe"). Max 8. Empty list if none.
-- happyHourWindows: every distinct happy hour the reviews give actual hours for. Minutes since midnight: 4pm = 960, 7pm = 1140, 10pm = 1320, midnight = 1440, 2am = 1560.
-  - "happy hour 4-7pm" -> [{"start": 960, "end": 1140}]
-  - "hours are 4-7 PM, plus a late-night happy hour from 10 PM to midnight" -> [{"start": 960, "end": 1140}, {"start": 1320, "end": 1440}] — list BOTH; a second, later window is important, never drop it
-  - "happy hour until 8" (evening implied) -> [{"start": null, "end": 1200}]
-  - reviews mention a happy hour but never say when -> [] (don't guess typical hours)`;
+- dishes: specific items reviewers praise, lowercase and short (e.g. "cacio e pepe"). Max 8. Empty list if none.
+- dealWindows: every distinct discounted window the reviews give actual hours for. Minutes since midnight: 4pm = 960, 7pm = 1140, 10pm = 1320, midnight = 1440, 2am = 1560.
+  - "specials 4-7pm" -> [{"start": 960, "end": 1140}]
+  - "4-7 PM, plus a late-night window from 10 PM to midnight" -> [{"start": 960, "end": 1140}, {"start": 1320, "end": 1440}] — list BOTH; a second, later window is important, never drop it
+  - "deals until 8" (evening implied) -> [{"start": null, "end": 1200}]
+  - reviews mention a discount but never say when -> [] (don't guess typical hours)`;
 }
 
 // Minutes since midnight, with an end past midnight pushed beyond 1440 so
@@ -73,11 +73,11 @@ export async function tagVenueRow(v) {
     .map((d) => d.toLowerCase().trim())
     .filter(Boolean)
     .slice(0, 8);
-  // Only meaningful alongside the vibe — a window without a happy hour is noise.
-  const happyHourWindows = vibes.includes('happy_hour') ? cleanWindows(parsed.happyHourWindows) : [];
+  // Only meaningful alongside the vibe — a window without the tag is noise.
+  const dealWindows = vibes.includes('happy_hour') ? cleanWindows(parsed.dealWindows) : [];
 
-  saveTags(v.id, vibes, dishes, happyHourWindows);
-  return { vibes, dishes, happyHourWindows };
+  saveTags(v.id, vibes, dishes, dealWindows);
+  return { vibes, dishes, dealWindows };
 }
 
 // Tags a batch of rows a handful at a time. onProgress, if given, fires after

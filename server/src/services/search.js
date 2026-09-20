@@ -1,5 +1,5 @@
 import { db } from '../db.js';
-import { isOpenAt, dayAndMinutesAt, latestHappyHourEnd } from '../lib/hours.js';
+import { isOpenAt, dayAndMinutesAt, latestDealEnd } from '../lib/hours.js';
 
 const M_PER_DEG_LAT = 111320;
 
@@ -38,10 +38,12 @@ export function normalizeFilters(raw = {}) {
     openDay: raw.openDay !== undefined && raw.openDay !== '' ? Number(raw.openDay) : undefined,
     openMinutes: num(raw.openMinutes),
     openNow: raw.openNow === true || raw.openNow === 'true',
-    // "happy hour that goes late": the deal must still be on at this
+    // "deals that go late": the discount must still be on at this
     // minute-of-day, which is a different thing from the venue being open
     // then. Ranks rather than filters — see searchVenues.
-    happyHourUntil: num(raw.happyHourUntil),
+    // happyHourUntil is the old name for this key, still sitting in the
+    // stored filters of plans created before the rename.
+    dealsUntil: num(raw.dealsUntil ?? raw.happyHourUntil),
   };
 }
 
@@ -107,7 +109,7 @@ export function searchVenues(f) {
     const explicitTarget = f.openDay !== undefined && f.openMinutes !== undefined
       ? { day: f.openDay, minutes: f.openMinutes }
       : null;
-    // "Open now" means now in *that venue's* timezone — a bar in LA and one
+    // "Open now" means now in *that venue's* timezone — a place in LA and one
     // in NYC aren't on the same clock, so this is computed per row, not once
     // for the whole batch. An explicit day/time (from NL parsing) is already
     // a fixed point in the week and applies as-is regardless of venue location.
@@ -129,14 +131,14 @@ export function searchVenues(f) {
     ? (a, b) => a.distance - b.distance
     : (a, b) => qualityScore(b) - qualityScore(a);
 
-  if (f.happyHourUntil !== undefined) {
-    // Google publishes no happy-hour hours, so this only exists where a
+  if (f.dealsUntil !== undefined) {
+    // Google publishes no discount hours, so this only exists where a
     // review happened to say it — roughly one venue in six. Ranking rather
     // than filtering keeps the rest visible instead of emptying the page:
     // confirmed-runs-late first, then everything else by the usual order.
     const runsLate = (v) => {
-      const end = latestHappyHourEnd(v.hh_windows);
-      return end != null && end >= f.happyHourUntil ? 1 : 0;
+      const end = latestDealEnd(v.hh_windows);
+      return end != null && end >= f.dealsUntil ? 1 : 0;
     };
     results.sort((a, b) => runsLate(b) - runsLate(a) || byRelevance(a, b));
   } else {

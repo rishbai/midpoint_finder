@@ -1,6 +1,6 @@
 // Generates a short, review-grounded blurb per venue explaining why it fits
-// what someone actually asked for — "happy hour that goes past 7pm" should
-// surface "$5 cocktails until 8pm" if a review says so, not a generic
+// what someone actually asked for — "a quiet spot to work" should surface
+// "outlets at every table, rarely busy before noon" if a review says so, not a generic
 // category line. One Claude call covers the whole shortlist (not one per
 // venue), same cost shape as query parsing.
 import Anthropic from '@anthropic-ai/sdk';

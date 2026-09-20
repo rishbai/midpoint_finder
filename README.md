@@ -1,18 +1,18 @@
 # midpoint
 
-Find restaurants, cafes, and bars anywhere in the US by what you actually want ("happy hour that goes past 7pm," a price, a cuisine, a specific dish), invite friends to a plan, and find the spot that's fair for everyone to get to — whichever of walking or transit (subway, bus, rail) is actually faster for each person.
+Find places to eat and meet anywhere in the US by what you actually want (a price, a cuisine, a specific dish), invite friends to a plan, and find the spot that's fair for everyone to get to — whichever of walking or transit (subway, bus, rail) is actually faster for each person.
 
 Not tied to any one city: venue search, hours, and timezone handling are all based on wherever a plan's group actually is — see `services/liveIngest.js` and `lib/hours.js`.
 
 ## How it works
 
 1. **Ingest** (`server/scripts/ingest.js`) sweeps a grid over a chosen area with the Google Places API and saves venues, including opening hours, to a local SQLite database — useful for pre-seeding a city you know you'll use a lot. `services/liveIngest.js` does the same thing automatically and on-demand for wherever a plan's group actually is, so pre-seeding isn't required. When a search area returns the max 20 results, it splits into smaller circles so dense blocks don't get missed.
-2. **Tag** (`server/scripts/tag.js`) sends each venue's reviews to Claude and saves vibe tags (date night, happy hour, work friendly, etc.) and praised dishes.
+2. **Tag** (`server/scripts/tag.js`) sends each venue's reviews to Claude and saves vibe tags (date night, work friendly, good for groups, etc.) and praised dishes.
 3. **Search** runs entirely against the local database, so filtering costs nothing per query. A free-text box ("Ask") sends what you typed to Claude, which turns it into structured filters — category, vibe, price, and an "open until" day/time check against the venue's real hours. The same filters (plus that free-text box) are also available when creating or editing a plan.
 4. **Accounts and friends**: sign up, add friends by email or by sharing your personal invite link (`/add-friend/:token`, in the Friends tab) — either way it lands as a normal pending request the other person accepts.
 5. **Plans**: a host describes what they're looking for and invites friends, or shares the plan's invite link (`/join/:token`). Opening that link joins instantly — no account needed, just a name, which creates a lightweight guest login (upgradeable to a real account later) so every plan feature already works for them. Each invitee shares their location (browser geolocation, or a typed address as a fallback) — shown live on a map. Once at least two people have shared, the host can find spots, and re-share their location later if plans change.
 6. **Meet in the middle** takes everyone's location, pulls the best matching venues near the geographic center, then gets real travel times from each person to each venue by both transit and walking (Google Routes API), taking whichever is faster per person — someone six blocks away walks, someone across town takes the train. Venues are ranked by the longest trip anyone has to make, with a penalty when trip times are lopsided. Clicking "See routes" on a result fetches the actual step-by-step directions per person (which line, how many stops, walk segments) on demand.
-7. **Descriptions** are grounded in each venue's real Google reviews and whatever you asked for — a plan for "late happy hour" surfaces "$5 cocktails until 8pm" if a review says so, not a generic category line (`server/src/services/describe.js`).
+7. **Descriptions** are grounded in each venue's real Google reviews and whatever you asked for — a plan for "quiet spot to work" surfaces "outlets at every table, rarely busy before noon" if a review says so, not a generic category line (`server/src/services/describe.js`).
 
 Note: Mapbox isochrones don't support transit, so this uses Google's route matrix instead of isochrone intersection — one matrix call for transit, one for walking, best-of per person.
 
@@ -52,7 +52,7 @@ Venues ingested before hours were tracked have `hours = NULL`, which makes them 
 ```bash
 npm run backfill-hours
 ```
-Then re-run `npm run tag -- --retag` if you want the `happy_hour` vibe (added alongside hours support) applied to existing venues.
+Then re-run `npm run tag -- --retag` to apply the time-of-day vibe tags (added alongside hours support) to existing venues.
 
 ## Deploying
 
@@ -106,9 +106,9 @@ client/
 ## API
 
 - `GET /api/meta` — categories, vibes, cuisines in the database
-- `GET /api/venues?category=bar&maxPrice=2&vibes=date_night,cozy&dish=negroni&lat=..&lng=..&radius=1000&openDay=5&openMinutes=1320`
+- `GET /api/venues?category=cafe&maxPrice=2&vibes=date_night,cozy&dish=espresso%20tonic&lat=..&lng=..&radius=1000&openDay=5&openMinutes=1320`
 - `GET /api/venues/:id`
-- `POST /api/query` — `{ "q": "happy hour that goes past 7pm" }` → `{ filters, results }`, filters parsed by Claude, each result's `description` grounded in its real reviews
+- `POST /api/query` — `{ "q": "good Indian food, open past 9pm" }` → `{ filters, results }`, filters parsed by Claude, each result's `description` grounded in its real reviews
 - `POST /api/meetup` — anonymous, address-based quick check: `{ "addresses": ["...", "..."], "filters": { ... }, "departureTime": "optional ISO" }`
 
 Everything below requires a session cookie (`POST /api/auth/login` or `/signup` sets it):

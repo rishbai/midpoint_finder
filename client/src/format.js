@@ -57,7 +57,7 @@ export function formatWhen(iso) {
 export const initial = (name) => (name ? name.trim()[0].toUpperCase() : '?');
 
 // Minutes since midnight -> "7pm" / "10:30pm". Values past 1440 are the
-// morning after (see venues.hh_end), so 1470 reads as "12:30am".
+// morning after (see venues.hh_windows), so 1470 reads as "12:30am".
 function clockTime(mins) {
   const m = ((mins % 1440) + 1440) % 1440;
   const h24 = Math.floor(m / 60);
@@ -66,9 +66,9 @@ function clockTime(mins) {
   return `${h}${min ? `:${String(min).padStart(2, '0')}` : ''}${h24 < 12 ? 'am' : 'pm'}`;
 }
 
-// "Happy hour 4–7pm, 10pm–midnight" — every window reviews actually stated,
-// since the late one is often a separate late-night deal (venues.hh_windows).
-export function happyHourLabel(windowsJson) {
+// "Deals 4–7pm, 10pm–midnight" — every window reviews actually stated, since
+// the late one is often a separate late-night offer (venues.hh_windows).
+export function dealLabel(windowsJson) {
   if (!windowsJson) return null;
   let windows;
   try {
@@ -82,11 +82,11 @@ export function happyHourLabel(windowsJson) {
     const until = end % 1440 === 0 ? 'midnight' : clockTime(end);
     return start == null ? `until ${until}` : `${clockTime(start)}–${until}`;
   };
-  return `Happy hour ${windows.map(span).join(', ')}`;
+  return `Deals ${windows.map(span).join(', ')}`;
 }
 
-// One-line human summary of an active filters object, e.g. "bar · $$ · 4.5+
-// · happy hour · open now" — used wherever we show what's currently applied.
+// One-line human summary of an active filters object, e.g. "cafe · $$ · 4.5+
+// · cozy · open now" — used wherever we show what's currently applied.
 export function summarizeFilters(filters) {
   return [
     filters.category,

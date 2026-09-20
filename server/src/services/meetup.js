@@ -1,7 +1,7 @@
 import { geocode, routeMatrix, pickBestLeg } from './google.js';
 import { searchVenues, distanceMeters } from './search.js';
 import { ensureCoverage } from './liveIngest.js';
-import { latestHappyHourEnd } from '../lib/hours.js';
+import { latestDealEnd } from '../lib/hours.js';
 import {
   normalizeTravelModes,
   usesWalk,
@@ -83,10 +83,10 @@ async function findCandidates(filters, center, radii) {
 const nearestDistance = (candidates) =>
   candidates.length ? Math.min(...candidates.map((c) => c.distance ?? Infinity)) : Infinity;
 
-// Worth this much detour, in seconds, to get a happy hour that's confirmed
-// to still be running when they asked for one that goes late. Enough that a
-// confirmed match beats a marginally-closer unknown, small enough that
-// fairness still decides — nobody gets sent across town over a badge.
+// Worth this much detour, in seconds, for a venue whose discount window is
+// confirmed to still be running when someone asked for one that goes late.
+// Enough that a confirmed match beats a marginally-closer unknown, small
+// enough that fairness still decides — nobody gets sent across town over a badge.
 const CONFIRMED_LATE_HH_BONUS = 480;
 
 // Everyone who shares a set of acceptable transit types can ride along on one
@@ -163,12 +163,12 @@ function scoreShortlist(shortlist, people, times, filters) {
       const secs = legs.map((l) => l.seconds);
       const longest = Math.max(...secs);
       const spread = longest - Math.min(...secs);
-      // Asking for a happy hour that runs late and then ordering purely by
-      // travel time buries the places that actually, verifiably run late
-      // under ones whose timing nobody knows. Credit them a bounded detour.
-      const end = latestHappyHourEnd(venue.hh_windows);
+      // Asking for a deal that runs late and then ordering purely by travel
+      // time buries the places that actually, verifiably run late under ones
+      // whose timing nobody knows. Credit them a bounded detour.
+      const end = latestDealEnd(venue.hh_windows);
       const confirmedLate =
-        filters.happyHourUntil !== undefined && end != null && end >= filters.happyHourUntil;
+        filters.dealsUntil !== undefined && end != null && end >= filters.dealsUntil;
       return {
         venue,
         minutes: secs.map((s) => Math.round(s / 60)),
@@ -250,7 +250,7 @@ export async function rankVenuesForPeople(rawPeople, filters, departureTime) {
 
   // Try progressively looser variants of the filters until something shows
   // up close to the middle. A narrow ask can rule out every real, nearby
-  // option even when the general idea ("a cheap bar") is well served nearby —
+  // option even when the general idea ("somewhere cheap") is well served nearby —
   // a specific vibe tag depends on Claude having found that exact thing
   // mentioned in a review (easy to under-match), and a strict price tier can
   // just be rare in one particular neighborhood without meaning "cheap" was

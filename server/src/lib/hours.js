@@ -48,10 +48,10 @@ export function parseTimeOfDay(text) {
   return hour * 60 + minute;
 }
 
-// The latest moment any of this venue's happy hours is still running, from
-// the JSON in venues.hh_windows (see db.js). Ends past midnight are stored
-// beyond 1440, so this compares directly against a "still on at X" target.
-export function latestHappyHourEnd(windowsJson) {
+// The latest moment any of this venue's discount windows is still running,
+// from the JSON in venues.hh_windows (see db.js). Ends past midnight are
+// stored beyond 1440, so this compares directly against a "still on at X" target.
+export function latestDealEnd(windowsJson) {
   if (!windowsJson) return null;
   try {
     const windows = typeof windowsJson === 'string' ? JSON.parse(windowsJson) : windowsJson;
@@ -70,7 +70,7 @@ export function dayIndex(name) {
 }
 
 // A venue's hours are meaningless without knowing its *local* wall-clock
-// time — a bar in LA "closing at 2am" is a different moment than one in NYC.
+// time — a spot in LA "closing at 2am" is a different moment than one in NYC.
 // Used with each venue's own lat/lng wherever possible (see search.js).
 // Falls back to Eastern only when no location is known yet at all (e.g.
 // resolving "today" while parsing free text, before anyone's said where

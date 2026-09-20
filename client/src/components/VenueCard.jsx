@@ -1,4 +1,4 @@
-import { label, price, happyHourLabel } from '../format.js';
+import { label, price, dealLabel } from '../format.js';
 
 // Google's 5-star rating, rescaled to a 0-10 score badge (Beli-style).
 function scoreClass(score) {
@@ -13,7 +13,7 @@ export default function VenueCard({ venue, children }) {
     .filter(Boolean)
     .join(' · ');
   const score = venue.rating ? Math.round(venue.rating * 2 * 10) / 10 : null;
-  const happyHour = happyHourLabel(venue.hh_windows);
+  const deals = dealLabel(venue.hh_windows);
 
   return (
     <article className="venue">
@@ -39,7 +39,7 @@ export default function VenueCard({ venue, children }) {
         ) : (
           venue.dishes.length > 0 && <p className="dishes">Known for {venue.dishes.slice(0, 4).join(', ')}</p>
         )}
-        {happyHour && <p className="hh-badge">{happyHour}</p>}
+        {deals && <p className="deal-badge">{deals}</p>}
         {venue.vibes.length > 0 && <p className="tags">{venue.vibes.map(label).join(', ')}</p>}
         {children}
       </div>

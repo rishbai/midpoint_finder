@@ -98,7 +98,7 @@ export default function Filters({ meta, filters, onChange }) {
       </div>
 
       <div className="filter-group grow">
-        <span className="filter-label">Dish or drink</span>
+        <span className="filter-label">Specific dish</span>
         <input
           type="text"
           placeholder="cacio e pepe, espresso tonic"

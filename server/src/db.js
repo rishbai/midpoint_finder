@@ -78,7 +78,7 @@ db.exec(`
     id          TEXT PRIMARY KEY,
     host_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     title       TEXT NOT NULL,
-    query_text  TEXT,               -- what the host typed, e.g. "happy hour that goes past 7pm"
+    query_text  TEXT,               -- what the host typed, e.g. "good Indian food, open past 9pm"
     filters     TEXT NOT NULL,      -- JSON, parsed/structured filters
     planned_for TEXT,               -- ISO datetime, optional
     status      TEXT NOT NULL DEFAULT 'gathering' CHECK (status IN ('gathering', 'closed')),
@@ -125,12 +125,12 @@ if (!venueColumns.includes('hours')) {
   db.exec('ALTER TABLE venues ADD COLUMN hours TEXT');
 }
 
-// When a venue's happy hour actually runs, pulled from review text by the
-// tagger: JSON [{start, end}, ...] in minutes since midnight. Plural because
-// places really do run two — "4-7 PM, plus a late-night happy hour from 10 PM
-// to midnight" — and the late one is the whole point of asking. An end past
-// midnight is stored beyond 1440 so "still on at X" is a plain compare.
-// Google has no API for this, so reviews are the only source and it's often null.
+// When a venue's discounted hours actually run, pulled from review text by
+// the tagger: JSON [{start, end}, ...] in minutes since midnight. Plural
+// because places really do run two — an early-evening window and a late one —
+// and the late one is often the whole point of asking. An end past midnight
+// is stored beyond 1440 so "still on at X" is a plain compare. Google has no
+// API for this, so reviews are the only source and it's often null.
 if (!venueColumns.includes('hh_windows')) {
   db.exec('ALTER TABLE venues ADD COLUMN hh_windows TEXT');
 }

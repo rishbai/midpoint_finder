@@ -232,8 +232,8 @@ legend { font-size: 0.875rem; font-weight: 700; margin-bottom: 0.4rem; padding: 
 /* Description grounded in this venue's actual reviews (server/services/describe.js) */
 .highlight { color: var(--black); font-weight: 600; }
 
-/* Confirmed happy-hour window, when a review actually stated it */
-.hh-badge {
+/* Confirmed discount window, when a review actually stated it */
+.deal-badge {
   display: inline-block;
   margin-top: 0.35rem !important;
   padding: 0.15rem 0.55rem;
