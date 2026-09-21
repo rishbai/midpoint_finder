@@ -32,7 +32,8 @@ Schema (omit any key you have no evidence for):
 }
 
 Rules:
-- A request about discounted hours ("happy hour", "specials") implies vibes: ["happy_hour"].
+- A request about discounted hours ("happy hour", "specials", "cheap happy hour") implies vibes: ["happy_hour"] AND category: "bar", unless a specific food dish or cuisine is also named. Both halves matter: without the category, "cheap happy hour" just means "cheap", and matches pizza and bagels.
+- In that same case, do NOT set maxPrice, even when they say "cheap" or "deals". The price tiers describe a venue's normal pricing, and the whole point of a discount window is that it isn't normal pricing — a tier-2 place with a real deal is exactly what was asked for, and filtering to tier 1 throws it away.
 - When the ask is about that discount window itself running late ("deals going late", "specials past 9"), set dealsUntil to that time (bare "late" -> 1260, i.e. 9pm) and do NOT set openDay/openMinutes. Those two are about the venue's own closing time, which is a different question — a place open till 4am whose discount ended at 6pm is exactly what this person doesn't want.
 - Words for a venue that serves mainly drinks, when no specific food dish is also named, imply category: "bar". Don't let this get dropped just because no other word for that category is present — it's what keeps such a request from matching a bagel shop.
 - "coffee"/"a cafe"/"to work from" imply category: "cafe".
@@ -47,6 +48,9 @@ Rules:
 Example: "somewhere still open past 7pm" with today = ${DAY_NAMES[today.day]} (index ${today.day}) ->
 {"openDay": ${today.day}, "openMinutes": 1140}`;
 }
+
+// Did they ask about a discount window, as opposed to just a cheap venue?
+const ASKED_ABOUT_A_DISCOUNT = /happy\s*hour|\bhh\b|\bspecials?\b|\bdeals?\b/i;
 
 export async function parseQuery(text, referenceTime) {
   const now = referenceTime ? new Date(referenceTime) : new Date();
@@ -75,6 +79,21 @@ export async function parseQuery(text, referenceTime) {
     parsed.openDay = dayAndMinutesAt(now).day;
   }
   if (parsed.openDay != null && parsed.openMinutes == null) delete parsed.openDay;
+
+  // A price tier describes what a place charges normally, and a discount
+  // window is by definition not normal pricing — so "cheap happy hour" must
+  // not become "tier-1 venues that also happen to have a happy hour". That
+  // reading throws away the closest, best-matching places for no reason.
+  // The model follows this from the prompt most of the time but not reliably,
+  // and the difference is the whole result set, so it's enforced here too.
+  //
+  // Only when they actually asked about a discount, though. The model also
+  // infers the happy_hour vibe from "cheap drinks", where "cheap" really does
+  // mean the venue should be inexpensive — dropping the price there would be
+  // answering a different question. A price set by hand never reaches this.
+  if (parsed.vibes?.includes('happy_hour') && ASKED_ABOUT_A_DISCOUNT.test(text)) {
+    delete parsed.maxPrice;
+  }
 
   return normalizeFilters(parsed);
 }
