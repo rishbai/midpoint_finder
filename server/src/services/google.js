@@ -21,7 +21,13 @@ const PLACE_FIELDS = [
   'places.regularOpeningHours',
 ].join(',');
 
-export async function searchNearby({ lat, lng, radius, includedTypes }) {
+// rankPreference decides which 20 of the matching places Google hands back,
+// and the two answers barely overlap. POPULARITY — the default — returns the
+// most prominent, which in a tourist district means hotels, Olive Garden and
+// Dave & Buster's. DISTANCE returns the closest, which is where the actual
+// neighborhood places live. For finding somewhere to meet, the second is
+// usually what people mean, so ingest asks for both (see liveIngest.js).
+export async function searchNearby({ lat, lng, radius, includedTypes, rankPreference = 'POPULARITY' }) {
   const res = await fetch('https://places.googleapis.com/v1/places:searchNearby', {
     method: 'POST',
     headers: {
@@ -32,6 +38,7 @@ export async function searchNearby({ lat, lng, radius, includedTypes }) {
     body: JSON.stringify({
       includedTypes,
       maxResultCount: 20, // API max; ingest splits the area when this is hit
+      rankPreference,
       locationRestriction: {
         circle: { center: { latitude: lat, longitude: lng }, radius },
       },

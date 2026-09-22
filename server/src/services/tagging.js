@@ -28,6 +28,7 @@ ${reviews}
 
 Return JSON: {"vibes": [...], "dishes": [...], "dealWindows": [{"start": <minutes|null>, "end": <minutes>}, ...]}
 - vibes: only from this list, and only when the reviews clearly support it: ${VIBES.join(', ')}
+- good_value specifically: reviewers say it's cheap, a good deal, or well priced for what you get ("$6 drafts", "cheap pints", "can't beat the prices", "dive bar prices"). Judge it from what they say, not from how fancy the place sounds — plenty of plain places are expensive and plenty of scruffy ones are not.
 - dishes: specific items reviewers praise, lowercase and short (e.g. "cacio e pepe"). Max 8. Empty list if none.
 - dealWindows: every distinct discounted window the reviews give actual hours for. Minutes since midnight: 4pm = 960, 7pm = 1140, 10pm = 1320, midnight = 1440, 2am = 1560.
   - "specials 4-7pm" -> [{"start": 960, "end": 1140}]

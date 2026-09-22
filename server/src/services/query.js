@@ -42,6 +42,7 @@ Rules:
 - openDay and openMinutes always travel together: never set one without the other.
 - If they give a time ("past 7pm", "after 9", "still open at 11") without naming a day, use today: openDay ${today.day} (${DAY_NAMES[today.day]}), openMinutes = that time converted as above.
 - If they name a day ("Friday night"), set openDay to that weekday's index (0=Sunday..6=Saturday) and, if no exact time is given, use 21:00 -> openMinutes 1260 for "night".
+- For a bar, "cheap"/"cheap drinks"/"good deals" means vibes: ["good_value"], NOT a price tier. Google's tiers describe a venue's food pricing and label nearly every city bar "moderate", so a tier filter there finds almost nothing; what reviewers say about drink prices is the real signal.
 - Price words, using Google's actual tiers (1=Inexpensive, 2=Moderate, 3=Expensive, 4=Very Expensive): "cheap"/"budget"/"inexpensive" -> maxPrice 1 (not 2 — moderate is not cheap). "affordable"/"reasonable" -> maxPrice 2. "upscale"/"fancy"/"nice" -> minPrice 3, and add vibe "upscale".
 - Only include a key when the request actually supports it. It's fine to return {}.
 
@@ -93,6 +94,22 @@ export async function parseQuery(text, referenceTime) {
   // answering a different question. A price set by hand never reaches this.
   if (parsed.vibes?.includes('happy_hour') && ASKED_ABOUT_A_DISCOUNT.test(text)) {
     delete parsed.maxPrice;
+    // A discount window is already the "cheap" part, so also demanding the
+    // good_value tag ANDs two sparse tags together and finds nothing. Every
+    // extra tag on a filter is another thing that had to turn up in the five
+    // reviews we get, and each one roughly halves what matches.
+    parsed.vibes = parsed.vibes.filter((v) => v !== 'good_value');
+  }
+
+  // Same reasoning one step further, for bars generally. Google's price tier
+  // is missing for roughly a quarter of them and calls almost all the rest
+  // "moderate", so filtering a night out by tier mostly filters out the city.
+  // "Cheap" becomes the review-derived good_value tag instead, which is what
+  // the word actually meant. Enforced here because the model is inconsistent
+  // about it and the difference is whether anything nearby matches at all.
+  if (parsed.category === 'bar' && parsed.maxPrice !== undefined) {
+    delete parsed.maxPrice;
+    parsed.vibes = [...new Set([...(parsed.vibes || []), 'good_value'])];
   }
 
   return normalizeFilters(parsed);

@@ -61,7 +61,15 @@ export function searchVenues(f) {
   if (f.category) { where.push('v.category = @category'); p.category = f.category; }
   if (f.cuisine) { where.push('v.cuisine = @cuisine'); p.cuisine = f.cuisine; }
   if (f.minPrice !== undefined) { where.push('v.price_level >= @minPrice'); p.minPrice = f.minPrice; }
-  if (f.maxPrice !== undefined) { where.push('v.price_level <= @maxPrice'); p.maxPrice = f.maxPrice; }
+  // An unpriced venue is unknown, not expensive — but `price_level <= 1` is
+  // NULL for those rows, so plain SQL silently drops every one of them. Around
+  // Times Square that was a quarter of the bars, the dive-bar end in
+  // particular, thrown away before ranking by the very filter meant to find
+  // them. Unknown prices stay in and are judged on everything else.
+  if (f.maxPrice !== undefined) {
+    where.push('(v.price_level <= @maxPrice OR v.price_level IS NULL)');
+    p.maxPrice = f.maxPrice;
+  }
   if (f.minRating !== undefined) { where.push('v.rating >= @minRating'); p.minRating = f.minRating; }
   if (f.q) { where.push('v.name LIKE @q'); p.q = `%${f.q}%`; }
   if (f.dish) {

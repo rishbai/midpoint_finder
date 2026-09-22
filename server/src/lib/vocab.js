@@ -19,6 +19,10 @@ export const VIBES = [
   'late_night',
   'outdoor_seating',
   'happy_hour',
+  // What reviewers say it costs, which is a different question from Google's
+  // price tier: that tier is missing for roughly a quarter of bars and calls
+  // almost every Manhattan one "moderate", so it can't answer "is this cheap".
+  'good_value',
 ];
 
 export const PRICE_LEVELS = {

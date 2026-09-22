@@ -7,6 +7,7 @@
 import { db } from '../db.js';
 import { searchNearby } from './google.js';
 import { CATEGORY_GROUPS, upsertVenue, toVenueRow, inUS } from './placesIngest.js';
+import { CATEGORY_TYPES } from '../lib/vocab.js';
 import { tagVenues } from './tagging.js';
 
 const CELL_DEGREES = 0.01; // ~1.1km — one cell roughly covers one sweep's useful radius
@@ -30,10 +31,14 @@ const clamp = (n, lo, hi) => Math.min(Math.max(n, lo), hi);
 const sweepRadius = (base, searchRadius, max) =>
   clamp(searchRadius || base, base, max);
 
+// Bumped when the sweeps themselves change, so areas covered by an older,
+// shallower pass get re-swept instead of being trusted for another 30 days.
+const SWEEP_VERSION = 'v2';
+
 // The radius is part of the cache key: a narrow sweep that ran earlier
 // shouldn't suppress the wider one a spread-out group needs.
 const cellKey = (lat, lng) => `${Math.round(lat / CELL_DEGREES)}:${Math.round(lng / CELL_DEGREES)}`;
-const scopeKey = (key, radius) => `${key}@${Math.round(radius / 1000)}k`;
+const scopeKey = (key, radius) => `${key}@${Math.round(radius / 1000)}k.${SWEEP_VERSION}`;
 
 const getCell = db.prepare('SELECT covered_at FROM covered_cells WHERE cell = ?');
 const markCell = db.prepare('INSERT OR REPLACE INTO covered_cells (cell, covered_at) VALUES (?, ?)');
@@ -43,9 +48,22 @@ function recentlyCovered(key) {
   return Boolean(row) && Date.now() - new Date(row.covered_at).getTime() < CELL_TTL_DAYS * 86400000;
 }
 
+// One sweep is really two calls. Google caps a nearby search at 20 results and
+// picks which 20 by rankPreference, and the two rankings return almost
+// disjoint sets: around Times Square, POPULARITY gives hotels and chains while
+// DISTANCE gives the bars people actually walk to. Asking only the default way
+// is why a Hell's Kitchen pub could be missing entirely while the index still
+// believed that block was covered.
 async function sweep(center, radius, includedTypes) {
-  const places = await searchNearby({ lat: center.lat, lng: center.lng, radius, includedTypes });
-  const rows = places.filter(inUS).map(toVenueRow);
+  const results = await Promise.all(
+    ['POPULARITY', 'DISTANCE'].map((rankPreference) =>
+      searchNearby({ lat: center.lat, lng: center.lng, radius, includedTypes, rankPreference })
+    )
+  );
+  const byId = new Map();
+  for (const place of results.flat()) if (place?.id) byId.set(place.id, place);
+
+  const rows = [...byId.values()].filter(inUS).map(toVenueRow);
   db.transaction(() => rows.forEach((r) => upsertVenue.run(r)))();
   return rows;
 }
@@ -55,12 +73,13 @@ async function sweep(center, radius, includedTypes) {
 // category group) and tags the ones with reviews right away, so vibe/dish
 // filters work on them immediately too — not just the next time tag.js runs.
 //
-// The generic sweep returns Google's 20 most prominent places per category —
-// for "indian food" that's usually zero Indian restaurants. So when a
-// cuisine is asked for, also do a targeted sweep for that one Google type
-// (indian_restaurant, italian_restaurant, ...), cached separately per
-// cuisine so it isn't skipped just because the generic sweep already ran.
-export async function ensureCoverage(center, { cuisine, radius } = {}) {
+// The generic sweep spends its 20 results on a whole category group, so the
+// thing actually being looked for can be missing from it entirely — for
+// "indian food" it's usually zero Indian restaurants, and for a night out it
+// was hotels rather than bars. So whatever narrows the ask (a cuisine, a
+// category) gets its own sweep too, cached under its own key so it isn't
+// skipped just because the generic sweep already ran for that block.
+export async function ensureCoverage(center, { cuisine, category, radius } = {}) {
   const key = cellKey(center.lat, center.lng);
   const now = new Date().toISOString();
   const inserted = [];
@@ -70,6 +89,19 @@ export async function ensureCoverage(center, { cuisine, radius } = {}) {
   if (!recentlyCovered(genericKey)) {
     for (const includedTypes of CATEGORY_GROUPS) inserted.push(...(await sweep(center, generic, includedTypes)));
     markCell.run(genericKey, now);
+  }
+
+  // Asking for a bar and getting the neighborhood's 20 most prominent
+  // "food and drink" places is how a block ends up represented by four
+  // hotels. A sweep for just this category spends all 20 on what was asked.
+  const categoryTypes = CATEGORY_TYPES[category];
+  if (categoryTypes) {
+    const categoryRadius = sweepRadius(SWEEP_RADIUS, radius, MAX_GENERIC_SWEEP_RADIUS);
+    const categoryKey = `${scopeKey(key, categoryRadius)}|${category}`;
+    if (!recentlyCovered(categoryKey)) {
+      inserted.push(...(await sweep(center, categoryRadius, categoryTypes)));
+      markCell.run(categoryKey, now);
+    }
   }
 
   if (cuisine) {

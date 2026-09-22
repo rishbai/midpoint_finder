@@ -2,6 +2,8 @@
 //   npm run tag                 untagged venues, up to 500
 //   npm run tag -- --limit=50
 //   npm run tag -- --retag      redo venues that already have tags
+//   npm run tag -- --retag --category=bar   ...just one category, when a new
+//                               vibe only matters there (see lib/vocab.js)
 
 import { db } from '../src/db.js';
 import { tagVenues, TAG_MODEL } from '../src/services/tagging.js';
@@ -18,8 +20,10 @@ const venues = db.prepare(`
   SELECT id, name, category, cuisine, reviews FROM venues
   WHERE reviews IS NOT NULL AND reviews != '[]'
   ${args.retag ? '' : 'AND tagged_at IS NULL'}
-  LIMIT ?
-`).all(LIMIT);
+  ${args.category ? 'AND category = @category' : ''}
+  ORDER BY rating_count DESC
+  LIMIT @limit
+`).all({ limit: LIMIT, ...(args.category ? { category: args.category } : {}) });
 
 async function main() {
   console.log(`Tagging ${venues.length} venues with ${TAG_MODEL}`);

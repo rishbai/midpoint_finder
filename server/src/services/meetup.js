@@ -69,9 +69,11 @@ async function findCandidates(filters, center, radii) {
     // The radius is the widest we're prepared to search, not the narrowest —
     // ingesting only the inner circle would leave the outer ones empty by
     // construction, which is exactly how a suburb ends up with three options.
-    await ensureCoverage(center, { cuisine: filters.cuisine, radius: radii.at(-1) }).catch((err) =>
-      console.warn('Live coverage sweep failed:', err.message)
-    );
+    await ensureCoverage(center, {
+      cuisine: filters.cuisine,
+      category: filters.category,
+      radius: radii.at(-1),
+    }).catch((err) => console.warn('Live coverage sweep failed:', err.message));
   }
   for (const radius of radii) {
     candidates = searchVenues({ ...filters, lat: center.lat, lng: center.lng, radius, sort: 'best', limit: 200 });
