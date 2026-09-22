@@ -7,7 +7,7 @@
 import { db } from '../db.js';
 import { searchNearby } from './google.js';
 import { CATEGORY_GROUPS, upsertVenue, toVenueRow, inUS } from './placesIngest.js';
-import { CATEGORY_TYPES } from '../lib/vocab.js';
+import { CATEGORY_TYPES, VENUE_STYLES } from '../lib/vocab.js';
 import { tagVenues } from './tagging.js';
 
 const CELL_DEGREES = 0.01; // ~1.1km — one cell roughly covers one sweep's useful radius
@@ -126,7 +126,7 @@ async function splitSweep(center, radius, includedTypes, budget) {
 // was hotels rather than bars. So whatever narrows the ask (a cuisine, a
 // category) gets its own sweep too, cached under its own key so it isn't
 // skipped just because the generic sweep already ran for that block.
-export async function ensureCoverage(center, { cuisine, category, radius } = {}) {
+export async function ensureCoverage(center, { cuisine, category, style, radius } = {}) {
   const key = cellKey(center.lat, center.lng);
   const now = new Date().toISOString();
   const inserted = [];
@@ -143,14 +143,17 @@ export async function ensureCoverage(center, { cuisine, category, radius } = {})
   // Asking for a bar and getting the neighborhood's 20 most prominent
   // "food and drink" places is how a block ends up represented by four
   // hotels. A sweep for just this category spends all 20 on what was asked.
-  const categoryTypes = CATEGORY_TYPES[category];
+  // A style is the narrowest thing asked for, so it gets the closest look:
+  // sweeping for `pub` finds pubs, where sweeping the whole bar category
+  // spends its twenty results on whatever is most prominent nearby.
+  const categoryTypes = VENUE_STYLES[style] || CATEGORY_TYPES[category];
   if (categoryTypes) {
     // Deliberately tighter than the generic sweep. Coverage right around the
     // middle is what decides the answer — a venue 4km out is never the fair
     // meeting point anyway — and a smaller circle is what makes the split
     // land on individual blocks rather than whole neighborhoods.
     const categoryRadius = clamp(radius || TARGETED_SWEEP_RADIUS, MIN_SPLIT_RADIUS, TARGETED_SWEEP_RADIUS);
-    const categoryKey = `${scopeKey(key, categoryRadius)}|${category}`;
+    const categoryKey = `${scopeKey(key, categoryRadius)}|${style || category}`;
     if (!recentlyCovered(categoryKey)) {
       const budget = { calls: 0, max: SPLIT_CALL_BUDGET };
       inserted.push(...(await splitSweep(center, categoryRadius, categoryTypes, budget)));

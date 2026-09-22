@@ -90,7 +90,8 @@ export function dealLabel(windowsJson) {
 // · cozy · open now" — used wherever we show what's currently applied.
 export function summarizeFilters(filters) {
   return [
-    filters.category,
+    // The style already says "bar", so showing both reads as a stutter.
+    filters.style ? filters.style.replace('_', ' ') : filters.category,
     filters.cuisine,
     filters.minPrice || filters.maxPrice ? price(filters.maxPrice || filters.minPrice) : null,
     filters.minRating ? `${filters.minRating}+ rating` : null,

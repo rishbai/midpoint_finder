@@ -1,5 +1,6 @@
 import { db } from '../db.js';
 import { isOpenAt, dayAndMinutesAt, latestDealEnd } from '../lib/hours.js';
+import { VENUE_STYLES } from '../lib/vocab.js';
 
 const M_PER_DEG_LAT = 111320;
 
@@ -27,6 +28,7 @@ export function normalizeFilters(raw = {}) {
     minRating: num(raw.minRating),
     vibes: list(raw.vibes),
     dish: raw.dish ? String(raw.dish).trim() : undefined,
+    style: VENUE_STYLES[raw.style] ? raw.style : undefined,
     q: raw.q ? String(raw.q).trim() : undefined,
     lat: num(raw.lat),
     lng: num(raw.lng),
@@ -72,6 +74,14 @@ export function searchVenues(f) {
   }
   if (f.minRating !== undefined) { where.push('v.rating >= @minRating'); p.minRating = f.minRating; }
   if (f.q) { where.push('v.name LIKE @q'); p.q = `%${f.q}%`; }
+  // Google's specific type for the place, e.g. irish_pub rather than just
+  // bar. Stored as a JSON array, matched on the quoted token so "pub" can't
+  // also match "irish_pub" or "gastropub" by accident.
+  if (f.style) {
+    const types = VENUE_STYLES[f.style];
+    where.push(`(${types.map((_, i) => `v.types LIKE @style${i}`).join(' OR ')})`);
+    types.forEach((t, i) => { p[`style${i}`] = `%"${t}"%`; });
+  }
   if (f.dish) {
     where.push(`EXISTS (SELECT 1 FROM venue_tags t
       WHERE t.venue_id = v.id AND t.kind = 'dish' AND t.tag LIKE @dish)`);

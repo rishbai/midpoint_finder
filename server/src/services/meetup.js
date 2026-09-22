@@ -72,6 +72,7 @@ async function findCandidates(filters, center, radii) {
     await ensureCoverage(center, {
       cuisine: filters.cuisine,
       category: filters.category,
+      style: filters.style,
       radius: radii.at(-1),
     }).catch((err) => console.warn('Live coverage sweep failed:', err.message));
   }
@@ -271,6 +272,15 @@ export async function rankVenuesForPeople(rawPeople, filters, departureTime) {
     attempts.push({
       filters: { ...filters, vibes: [], dish: undefined, maxPrice: filters.maxPrice + 1 },
       note: 'Nothing cheap enough was close by, so the price cutoff was loosened by one tier.',
+    });
+  }
+  // Style goes last, because it's usually the most specific thing someone
+  // said out loud — "a pub" is a clearer instruction than any vibe tag — and
+  // widening to every kind of bar should be the final resort, not the first.
+  if (filters.style) {
+    attempts.push({
+      filters: { ...filters, style: undefined, vibes: [], dish: undefined },
+      note: `No ${filters.style.replace('_', ' ')} nearby matched, so these are other bars in the middle instead.`,
     });
   }
 

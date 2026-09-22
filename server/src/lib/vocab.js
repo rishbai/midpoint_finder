@@ -19,6 +19,21 @@ export const CATEGORY_TYPES = {
   ],
 };
 
+// Category says "somewhere that serves drinks", which is too blunt a word
+// for a night out: it puts a neighborhood pub, a jazz club and a tasting-menu
+// cocktail room in one bucket. Google already distinguishes them by type, so
+// a style narrows to the kind of place someone pictured. Every type here is
+// one the Places API accepts as a query filter, since these are used both to
+// search what's stored and to go and fetch more of it.
+export const VENUE_STYLES = {
+  pub: ['pub', 'irish_pub', 'gastropub', 'bar_and_grill'],
+  cocktail_bar: ['cocktail_bar'],
+  wine_bar: ['wine_bar'],
+  sports_bar: ['sports_bar'],
+  brewery: ['brewery', 'beer_garden'],
+  lounge: ['lounge_bar'],
+};
+
 // Fixed list so the tagger can't invent new vibes.
 export const VIBES = [
   'date_night',
