@@ -24,6 +24,16 @@ const MAX_GENERIC_SWEEP_RADIUS = 4000;
 
 const clamp = (n, lo, hi) => Math.min(Math.max(n, lo), hi);
 
+const PLACES_PER_CALL = 20; // Google's hard cap on one nearby search
+const M_PER_DEG_LAT = 111320;
+const MIN_SPLIT_RADIUS = 350; // below this the circles overlap more than they add
+// Each entry is one round trip per ranking, paid while someone waits for their
+// plan — enough to look properly around the middle, not enough to map a city.
+const SPLIT_CALL_BUDGET = 7;
+// One circle over a dense neighborhood only ever returns its densest corner,
+// so the targeted sweep starts small and splits from there.
+const TARGETED_SWEEP_RADIUS = 1500;
+
 // Between Cary and Apex, a 900m sweep lands in trees: the restaurants are in
 // the two downtowns, 4km either side. Match the sweep to the area the search
 // will actually cover, so what comes back is the places people would really
@@ -65,6 +75,43 @@ async function sweep(center, radius, includedTypes) {
 
   const rows = [...byId.values()].filter(inUS).map(toVenueRow);
   db.transaction(() => rows.forEach((r) => upsertVenue.run(r)))();
+  // Either ranking coming back full means we saw a sample, not everything.
+  return { rows, capped: results.some((r) => r.length >= PLACES_PER_CALL) };
+}
+
+// Where the ask is specific, one circle isn't enough. Google returns at most
+// 20 places per call, and under DISTANCE those are simply the 20 nearest —
+// the radius only sets an outer bound, so asking over 4km returns the same
+// twenty as asking over 1km. In the West Village that's a couple of blocks'
+// worth, which is how bars a ten-minute walk from the middle stayed invisible
+// no matter how wide the search got.
+//
+// So when a circle comes back full, split it into four and look closer, the
+// way the batch ingest does (scripts/ingest.js). Bounded by a call budget
+// rather than depth: this runs while someone waits for their plan, and the
+// point is a decent look around the middle, not a census of Manhattan.
+async function splitSweep(center, radius, includedTypes, budget) {
+  if (budget.calls >= budget.max) return [];
+  budget.calls += 1;
+
+  const { rows, capped } = await sweep(center, radius, includedTypes);
+  if (!capped || radius <= MIN_SPLIT_RADIUS) return rows;
+
+  const offset = radius / 2;
+  const dLat = offset / M_PER_DEG_LAT;
+  const dLng = offset / (M_PER_DEG_LAT * Math.cos((center.lat * Math.PI) / 180));
+  const corners = [[1, 1], [1, -1], [-1, 1], [-1, -1]];
+  for (const [sy, sx] of corners) {
+    if (budget.calls >= budget.max) break;
+    rows.push(
+      ...(await splitSweep(
+        { lat: center.lat + sy * dLat, lng: center.lng + sx * dLng },
+        radius * 0.71,
+        includedTypes,
+        budget
+      ))
+    );
+  }
   return rows;
 }
 
@@ -87,7 +134,9 @@ export async function ensureCoverage(center, { cuisine, category, radius } = {})
   const generic = sweepRadius(SWEEP_RADIUS, radius, MAX_GENERIC_SWEEP_RADIUS);
   const genericKey = scopeKey(key, generic);
   if (!recentlyCovered(genericKey)) {
-    for (const includedTypes of CATEGORY_GROUPS) inserted.push(...(await sweep(center, generic, includedTypes)));
+    for (const includedTypes of CATEGORY_GROUPS) {
+      inserted.push(...(await sweep(center, generic, includedTypes)).rows);
+    }
     markCell.run(genericKey, now);
   }
 
@@ -96,10 +145,15 @@ export async function ensureCoverage(center, { cuisine, category, radius } = {})
   // hotels. A sweep for just this category spends all 20 on what was asked.
   const categoryTypes = CATEGORY_TYPES[category];
   if (categoryTypes) {
-    const categoryRadius = sweepRadius(SWEEP_RADIUS, radius, MAX_GENERIC_SWEEP_RADIUS);
+    // Deliberately tighter than the generic sweep. Coverage right around the
+    // middle is what decides the answer — a venue 4km out is never the fair
+    // meeting point anyway — and a smaller circle is what makes the split
+    // land on individual blocks rather than whole neighborhoods.
+    const categoryRadius = clamp(radius || TARGETED_SWEEP_RADIUS, MIN_SPLIT_RADIUS, TARGETED_SWEEP_RADIUS);
     const categoryKey = `${scopeKey(key, categoryRadius)}|${category}`;
     if (!recentlyCovered(categoryKey)) {
-      inserted.push(...(await sweep(center, categoryRadius, categoryTypes)));
+      const budget = { calls: 0, max: SPLIT_CALL_BUDGET };
+      inserted.push(...(await splitSweep(center, categoryRadius, categoryTypes, budget)));
       markCell.run(categoryKey, now);
     }
   }
@@ -109,7 +163,8 @@ export async function ensureCoverage(center, { cuisine, category, radius } = {})
     const cuisineKey = `${scopeKey(key, cuisineRadius)}|${cuisine}`;
     if (!recentlyCovered(cuisineKey)) {
       try {
-        inserted.push(...(await sweep(center, cuisineRadius, [`${cuisine}_restaurant`])));
+        const budget = { calls: 0, max: SPLIT_CALL_BUDGET };
+        inserted.push(...(await splitSweep(center, cuisineRadius, [`${cuisine}_restaurant`], budget)));
         markCell.run(cuisineKey, now);
       } catch (err) {
         // Most likely not a type Google recognizes (cuisines come from the

@@ -8,7 +8,8 @@
     "ingest": "node --env-file=.env scripts/ingest.js",
     "tag": "node --env-file=.env scripts/tag.js",
     "backfill-hours": "node --env-file=.env scripts/backfill-hours.js",
-    "meetup": "node --env-file=.env scripts/meetup.js"
+    "meetup": "node --env-file=.env scripts/meetup.js",
+    "recategorize": "node --env-file=.env scripts/recategorize.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.126.0",

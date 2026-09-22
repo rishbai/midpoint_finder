@@ -2,7 +2,21 @@
 export const CATEGORY_TYPES = {
   restaurant: ['restaurant'],
   cafe: ['cafe', 'coffee_shop', 'bakery'],
-  bar: ['bar', 'wine_bar', 'pub'],
+  // Google files a place under a specific type, not the generic one: an
+  // Irish pub is `irish_pub`, a dive with food is `bar_and_grill`. Listing
+  // only the generic three both mis-filed those places and left them out of
+  // the sweeps that go looking for somewhere to get a drink.
+  bar: [
+    'bar',
+    'pub',
+    'wine_bar',
+    'cocktail_bar',
+    'sports_bar',
+    'irish_pub',
+    'bar_and_grill',
+    'beer_garden',
+    'brewery',
+  ],
 };
 
 // Fixed list so the tagger can't invent new vibes.
@@ -33,14 +47,36 @@ export const PRICE_LEVELS = {
   PRICE_LEVEL_VERY_EXPENSIVE: 4,
 };
 
+// Most of Google's food types end in _restaurant, but a handful of common
+// ones don't, and without them a steakhouse falls through to whatever else
+// it's tagged as — usually its bar.
+const OTHER_FOOD_TYPES = [
+  'restaurant',
+  'steak_house',
+  'sandwich_shop',
+  'deli',
+  'diner',
+  'food_court',
+  'meal_takeaway',
+  'meal_delivery',
+];
+const isRestaurantType = (t) => OTHER_FOOD_TYPES.includes(t) || t.endsWith('_restaurant');
+
 export function categorize(primaryType, types = []) {
-  const all = [primaryType, ...types].filter(Boolean);
-  // primary type is checked first, so a "bar" that also serves food stays a bar
-  for (const t of all) {
-    if (CATEGORY_TYPES.bar.includes(t)) return 'bar';
-    if (CATEGORY_TYPES.cafe.includes(t)) return 'cafe';
-    if (t === 'restaurant' || t.endsWith('_restaurant')) return 'restaurant';
+  // Google's own answer to "what is this place" wins when we recognize it, so
+  // a restaurant with a bar in it stays a restaurant.
+  if (primaryType) {
+    if (CATEGORY_TYPES.bar.includes(primaryType)) return 'bar';
+    if (CATEGORY_TYPES.cafe.includes(primaryType)) return 'cafe';
+    if (isRestaurantType(primaryType)) return 'restaurant';
   }
+  // Otherwise the whole type list, bars first — and deliberately not in list
+  // order. Google tags an Irish pub as irish_pub, pub, bar AND
+  // irish_restaurant; walking the list in order hit the restaurant tag first
+  // and filed a pub as a restaurant, where no search for a drink could reach it.
+  if (types.some((t) => CATEGORY_TYPES.bar.includes(t))) return 'bar';
+  if (types.some((t) => CATEGORY_TYPES.cafe.includes(t))) return 'cafe';
+  if (types.some(isRestaurantType)) return 'restaurant';
   return 'other';
 }
 
