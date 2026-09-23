@@ -12,7 +12,7 @@ import { distanceMeters } from './search.js';
 import { tagVenues } from './tagging.js';
 
 const CELL_DEGREES = 0.01; // ~1.1km — one cell roughly covers one sweep's useful radius
-const CELL_TTL_DAYS = 30;
+const CELL_TTL_DAYS = 60; // venues don't turn over fast enough to re-buy a block monthly
 const SWEEP_RADIUS = 900; // meters; a single circle per category, no recursive splitting (cost-bounded)
 // A cuisine-specific sweep is a much narrower net (one Google type, e.g.
 // indian_restaurant), so it can cast wider without hitting the 20-result cap.
@@ -148,9 +148,9 @@ async function splitSweep(center, radius, includedTypes, budget, depth = 0) {
 }
 
 // Call when a local search near `center` came back sparse. Fetches fresh
-// venues from Google Places for that immediate area (three calls: one per
-// category group) and tags the ones with reviews right away, so vibe/dish
-// filters work on them immediately too — not just the next time tag.js runs.
+// venues from Google Places for that area and tags the relevant ones right
+// away, so vibe/dish filters work on them immediately too, not just the next
+// time tag.js runs.
 //
 // The generic sweep spends its 20 results on a whole category group, so the
 // thing actually being looked for can be missing from it entirely — for
@@ -163,9 +163,14 @@ export async function ensureCoverage(center, { cuisine, category, style, radius 
   const now = new Date().toISOString();
   const inserted = [];
 
+  // When the ask names a category or kind, the targeted sweep below covers
+  // it better than the generic one would, and the other two categories are
+  // speculative spend on searches nobody has made yet. They get swept the
+  // first time someone actually asks for them here.
+  const categoryTypes = VENUE_STYLES[style] || CATEGORY_TYPES[category];
   const generic = sweepRadius(SWEEP_RADIUS, radius, MAX_GENERIC_SWEEP_RADIUS);
   const genericKey = scopeKey(key, generic);
-  if (!recentlyCovered(genericKey)) {
+  if (!categoryTypes && !recentlyCovered(genericKey)) {
     for (const includedTypes of CATEGORY_GROUPS) {
       inserted.push(...(await sweep(center, generic, includedTypes)).rows);
     }
@@ -178,13 +183,12 @@ export async function ensureCoverage(center, { cuisine, category, style, radius 
   // A style is the narrowest thing asked for, so it gets the closest look:
   // sweeping for `pub` finds pubs, where sweeping the whole bar category
   // spends its twenty results on whatever is most prominent nearby.
-  const categoryTypes = VENUE_STYLES[style] || CATEGORY_TYPES[category];
   if (categoryTypes) {
-    // Deliberately tighter than the generic sweep. Coverage right around the
-    // middle is what decides the answer — a venue 4km out is never the fair
-    // meeting point anyway — and a smaller circle is what makes the split
-    // land on individual blocks rather than whole neighborhoods.
-    const categoryRadius = clamp(radius || TARGETED_SWEEP_RADIUS, MIN_SPLIT_RADIUS, TARGETED_SWEEP_RADIUS);
+    // Starts at a quarter of the search area: about 1.5km for a city group,
+    // wider for a spread-out suburban one. Small enough that splitting lands
+    // on blocks rather than neighborhoods, since coverage right around the
+    // middle is what decides the answer.
+    const categoryRadius = clamp(Math.round((radius || 0) / 4) || TARGETED_SWEEP_RADIUS, 1000, MAX_GENERIC_SWEEP_RADIUS);
     const categoryKey = `${scopeKey(key, categoryRadius)}|${style || category}`;
     if (!recentlyCovered(categoryKey)) {
       const budget = { calls: 0, max: SPLIT_CALL_BUDGET };

@@ -1,6 +1,6 @@
 import { db } from '../db.js';
 import { isOpenAt, dayAndMinutesAt, latestDealEnd } from '../lib/hours.js';
-import { VENUE_STYLES } from '../lib/vocab.js';
+import { VENUE_STYLES, styleCategory } from '../lib/vocab.js';
 
 const M_PER_DEG_LAT = 111320;
 
@@ -20,15 +20,18 @@ const list = (v) =>
 
 // Accepts query-string values or a JSON body and returns clean filters.
 export function normalizeFilters(raw = {}) {
+  // A style names a kind of one category, so it settles the category too.
+  // Otherwise "steakhouse" with a stale category of "bar" matches nothing.
+  const style = VENUE_STYLES[raw.style] ? raw.style : undefined;
   return {
-    category: raw.category || undefined,
+    category: style ? styleCategory(style) : raw.category || undefined,
     cuisine: raw.cuisine || undefined,
     minPrice: num(raw.minPrice),
     maxPrice: num(raw.maxPrice),
     minRating: num(raw.minRating),
     vibes: list(raw.vibes),
     dish: raw.dish ? String(raw.dish).trim() : undefined,
-    style: VENUE_STYLES[raw.style] ? raw.style : undefined,
+    style,
     q: raw.q ? String(raw.q).trim() : undefined,
     lat: num(raw.lat),
     lng: num(raw.lng),

@@ -14,6 +14,7 @@ import {
 export const MAX_PEOPLE = 6;
 const MATRIX_LIMIT = 100; // Google's cap for transit route matrices
 const MIN_CANDIDATES = 15;
+const WALK_RANGE_METERS = 2500; // beyond this a walking leg never beats the alternatives
 
 function badRequest(message) {
   const err = new Error(message);
@@ -122,7 +123,14 @@ async function travelTimes(people, shortlist, departureTime, { drivers }) {
     });
 
   const jobs = [];
-  const walkers = indicesWhere(people, usesWalk);
+  // Walking is only ever the answer within a couple of kilometers, and a
+  // matrix is billed per person per venue, so pricing a walk from Jersey
+  // City to twenty-five Manhattan bars buys twenty-five numbers that can't
+  // win. Anyone with no venue in range skips the walking matrix entirely;
+  // their transit or driving legs are untouched.
+  const walkers = indicesWhere(people, usesWalk).filter((i) =>
+    shortlist.some((v) => distanceMeters(people[i], v) <= WALK_RANGE_METERS)
+  );
   if (walkers.length) {
     jobs.push(routeMatrix(pick(walkers), shortlist, 'WALK').then(scatter(walkers, 'WALK')));
   }

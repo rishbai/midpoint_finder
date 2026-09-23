@@ -25,14 +25,48 @@ export const CATEGORY_TYPES = {
 // a style narrows to the kind of place someone pictured. Every type here is
 // one the Places API accepts as a query filter, since these are used both to
 // search what's stored and to go and fetch more of it.
-export const VENUE_STYLES = {
-  pub: ['pub', 'irish_pub', 'gastropub', 'bar_and_grill'],
-  cocktail_bar: ['cocktail_bar'],
-  wine_bar: ['wine_bar'],
-  sports_bar: ['sports_bar'],
-  brewery: ['brewery', 'beer_garden'],
-  lounge: ['lounge_bar'],
+//
+// Grouped by the category each belongs to, which is also what the filter UI
+// shows once a category is picked. Types are the ones actually present in
+// the data, in the order people tend to look for them.
+export const STYLES_BY_CATEGORY = {
+  bar: {
+    pub: ['pub', 'irish_pub', 'gastropub', 'bar_and_grill'],
+    cocktail_bar: ['cocktail_bar'],
+    wine_bar: ['wine_bar'],
+    sports_bar: ['sports_bar'],
+    brewery: ['brewery', 'beer_garden'],
+    lounge: ['lounge_bar'],
+    live_music: ['live_music_venue'],
+  },
+  restaurant: {
+    brunch: ['brunch_restaurant', 'breakfast_restaurant'],
+    pizza: ['pizza_restaurant'],
+    steakhouse: ['steak_house'],
+    seafood: ['seafood_restaurant'],
+    vegetarian: ['vegetarian_restaurant', 'vegan_restaurant'],
+    fine_dining: ['fine_dining_restaurant'],
+    fast_casual: ['fast_food_restaurant', 'sandwich_shop'],
+  },
+  cafe: {
+    coffee: ['coffee_shop'],
+    bakery: ['bakery', 'pastry_shop'],
+    breakfast: ['breakfast_restaurant', 'brunch_restaurant'],
+    tea: ['tea_house'],
+    dessert: ['dessert_shop', 'ice_cream_shop', 'confectionery'],
+    bagels: ['bagel_shop'],
+    juice: ['juice_shop'],
+  },
 };
+
+// Flat view for lookups: style name -> Google types.
+export const VENUE_STYLES = Object.fromEntries(
+  Object.values(STYLES_BY_CATEGORY).flatMap((styles) => Object.entries(styles))
+);
+
+// A style is always a kind of one category, so naming one settles the other.
+export const styleCategory = (style) =>
+  Object.keys(STYLES_BY_CATEGORY).find((cat) => style in STYLES_BY_CATEGORY[cat]) || null;
 
 // Fixed list so the tagger can't invent new vibes.
 export const VIBES = [

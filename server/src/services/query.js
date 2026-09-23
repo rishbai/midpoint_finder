@@ -2,7 +2,7 @@
 // shop to work from this afternoon") into the structured filters search.js
 // expects.
 import Anthropic from '@anthropic-ai/sdk';
-import { CATEGORY_TYPES, VIBES, VENUE_STYLES } from '../lib/vocab.js';
+import { CATEGORY_TYPES, VIBES, VENUE_STYLES, STYLES_BY_CATEGORY, styleCategory } from '../lib/vocab.js';
 import { listCuisines, normalizeFilters } from './search.js';
 import { dayAndMinutesAt, DAY_NAMES } from '../lib/hours.js';
 
@@ -22,7 +22,7 @@ Schema (omit any key you have no evidence for):
   "cuisine": lowercase cuisine word, e.g. "italian", "japanese" (omit if not a restaurant ask),
   "vibes": array, only from ${JSON.stringify(VIBES)},
   "dish": a specific dish or order mentioned, lowercase (e.g. "espresso tonic"),
-  "style": the kind of drinking place, one of ${JSON.stringify(Object.keys(VENUE_STYLES))}, when they named one,
+  "style": the kind of place within its category, when they named one. By category: ${Object.entries(STYLES_BY_CATEGORY).map(([c, s]) => `${c}: ${Object.keys(s).join('/')}`).join('; ')},
   "minPrice": 1-4,
   "maxPrice": 1-4,
   "minRating": number like 4.5,
@@ -37,7 +37,7 @@ Rules:
 - In that same case, do NOT set maxPrice, even when they say "cheap" or "deals". The price tiers describe a venue's normal pricing, and the whole point of a discount window is that it isn't normal pricing — a tier-2 place with a real deal is exactly what was asked for, and filtering to tier 1 throws it away.
 - When the ask is about that discount window itself running late ("deals going late", "specials past 9"), set dealsUntil to that time (bare "late" -> 1260, i.e. 9pm) and do NOT set openDay/openMinutes. Those two are about the venue's own closing time, which is a different question — a place open till 4am whose discount ended at 6pm is exactly what this person doesn't want.
 - Words for a venue that serves mainly drinks, when no specific food dish is also named, imply category: "bar". Don't let this get dropped just because no other word for that category is present — it's what keeps such a request from matching a bagel shop.
-- Name the style when they do: "pub"/"irish pub"/"gastropub" -> style "pub"; "cocktail bar" -> "cocktail_bar"; "wine bar" -> "wine_bar"; "sports bar" -> "sports_bar"; "brewery"/"beer garden" -> "brewery"; "lounge" -> "lounge". Category "bar" on its own covers everything from a jazz club to a tasting-menu cocktail room, so without this a request for a pub comes back with neither.
+- Name the style when they do, and the category follows from it. Bars: "pub"/"irish pub"/"gastropub" -> "pub"; "cocktail bar" -> "cocktail_bar"; "wine bar" -> "wine_bar"; "sports bar" -> "sports_bar"; "brewery"/"beer garden" -> "brewery"; "lounge" -> "lounge"; "live music"/"jazz" -> "live_music". Restaurants: "brunch" -> "brunch"; "pizza" -> "pizza"; "steakhouse" -> "steakhouse"; "seafood" -> "seafood"; "vegetarian"/"vegan" -> "vegetarian"; "fine dining"/"tasting menu" -> "fine_dining"; "fast casual"/"quick bite"/"sandwich" -> "fast_casual". Cafes: "coffee" -> "coffee"; "bakery"/"pastries" -> "bakery"; "breakfast" -> "breakfast"; "tea" -> "tea"; "dessert"/"ice cream" -> "dessert"; "bagels" -> "bagels"; "juice"/"smoothie" -> "juice". A category on its own is too blunt: "bar" covers a jazz club and a tasting-menu cocktail room alike, and "restaurant" covers brunch and a steakhouse.
 - "coffee"/"a cafe"/"to work from" imply category: "cafe".
 - Plain praise with nothing else specific ("good food", "great food", "amazing food", "quality food") implies category: "restaurant" and minRating: 4.5. Don't leave a request like this with no filters at all — "good" specifically means a rating floor, not "anything." Without it, a search just ranks by review volume, which rewards busy tourist/arcade spots over actual food quality.
 - openMinutes = hour*60 + minute, using a 24-hour hour. Convert carefully: 7pm = 19:00 = 19*60 = 1140. 11pm = 23:00 = 1380. 9am = 9:00 = 540.
@@ -75,9 +75,9 @@ export async function parseQuery(text, referenceTime) {
   if (parsed.cuisine && !cuisines.has(parsed.cuisine)) delete parsed.cuisine;
   if (!Object.keys(CATEGORY_TYPES).includes(parsed.category)) delete parsed.category;
   if (!VENUE_STYLES[parsed.style]) delete parsed.style;
-  // A style is a kind of bar, so it implies the category even when the model
-  // only returned one of the two.
-  if (parsed.style) parsed.category = 'bar';
+  // A style is a kind of one category, so it implies the category even when
+  // the model only returned one of the two (or got them crossed).
+  if (parsed.style) parsed.category = styleCategory(parsed.style);
   if (Array.isArray(parsed.vibes)) parsed.vibes = parsed.vibes.filter((v) => VIBES.includes(v));
 
   // Belt and suspenders: don't let a model slip that forgets the day silently
