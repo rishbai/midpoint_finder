@@ -22,27 +22,25 @@ const VEHICLES = {
 };
 export const vehicleLabel = (vehicle) => VEHICLES[vehicle] || 'transit';
 
-const MODE_ICONS = { WALK: '🚶', TRANSIT: '🚇', DRIVE: '🚗' };
-export const modeIcon = (mode) => MODE_ICONS[mode] || '';
+// The mode a ranked leg ended up using, as a word ("12 min by subway").
+const MODE_WORDS = { WALK: 'walking', TRANSIT: 'transit', DRIVE: 'driving' };
+export const modeWord = (mode) => MODE_WORDS[mode] || '';
 
 // How one person is willing to travel for one plan
-// (plan_participants.travel_modes on the server). Everyone starts with all
-// four; you turn off what you won't use, for that plan only.
+// (plan_participants.travel_modes on the server). Chosen per plan, since the
+// same person takes the subway at home and drives when visiting family.
 export const TRAVEL_MODES = [
-  { value: 'walk', label: 'Walking', icon: '🚶' },
-  { value: 'subway', label: 'Subway & train', icon: '🚇' },
-  { value: 'bus', label: 'Bus', icon: '🚌' },
-  { value: 'drive', label: 'Driving', icon: '🚗' },
+  { value: 'walk', label: 'Walking' },
+  { value: 'subway', label: 'Subway or train' },
+  { value: 'bus', label: 'Bus' },
+  { value: 'drive', label: 'Driving' },
 ];
 export const ALL_TRAVEL_MODES = TRAVEL_MODES.map((m) => m.value);
 
-// "🚶 🚇" — a compact read of how someone gets around, for a participant row.
-export const travelModeIcons = (modes) =>
-  (modes || []).map((v) => TRAVEL_MODES.find((m) => m.value === v)?.icon).filter(Boolean).join(' ');
-
-// Only worth spelling out when it isn't just "anything" — otherwise it's noise.
+// "Walking, Bus" for a participant row. Picking everything reads as "any way".
 export function travelModeSummary(modes) {
-  if (!modes?.length || modes.length === ALL_TRAVEL_MODES.length) return null;
+  if (!modes?.length) return null;
+  if (modes.length === ALL_TRAVEL_MODES.length) return 'Any way';
   return TRAVEL_MODES.filter((m) => modes.includes(m.value)).map((m) => m.label).join(', ');
 }
 
@@ -57,6 +55,13 @@ export function formatWhen(iso) {
 
 export const initial = (name) => (name ? name.trim()[0].toUpperCase() : '?');
 
+// A venue's id is its Google place id (see server/src/db.js), and Google
+// Maps accepts that directly in a search URL. Just a link, nothing billed.
+export const mapsUrl = (venue) =>
+  `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+    `${venue.name} ${venue.address || ''}`.trim()
+  )}&query_place_id=${encodeURIComponent(venue.id)}`;
+
 // Minutes since midnight -> "7pm" / "10:30pm". Values past 1440 are the
 // morning after (see venues.hh_windows), so 1470 reads as "12:30am".
 function clockTime(mins) {
@@ -67,7 +72,7 @@ function clockTime(mins) {
   return `${h}${min ? `:${String(min).padStart(2, '0')}` : ''}${h24 < 12 ? 'am' : 'pm'}`;
 }
 
-// "Deals 4–7pm, 10pm–midnight" — every window reviews actually stated, since
+// "Deals 4pm to 7pm, 10pm to midnight": every window reviews actually stated, since
 // the late one is often a separate late-night offer (venues.hh_windows).
 export function dealLabel(windowsJson) {
   if (!windowsJson) return null;
@@ -81,7 +86,7 @@ export function dealLabel(windowsJson) {
 
   const span = ({ start, end }) => {
     const until = end % 1440 === 0 ? 'midnight' : clockTime(end);
-    return start == null ? `until ${until}` : `${clockTime(start)}–${until}`;
+    return start == null ? `until ${until}` : `${clockTime(start)} to ${until}`;
   };
   return `Deals ${windows.map(span).join(', ')}`;
 }

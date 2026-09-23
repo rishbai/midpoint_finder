@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { listPlans } from '../api.js';
 import { formatWhen } from '../format.js';
+import { navigate } from '../router.js';
 import Avatar from './Avatar.jsx';
 import NewPlan from './NewPlan.jsx';
 import PlanDetail from './PlanDetail.jsx';
@@ -14,66 +15,50 @@ function planStatus(p) {
   return { kind: 'muted', text: 'Just you so far' };
 }
 
-export default function Plans() {
-  const [plans, setPlans] = useState([]);
-  const [view, setView] = useState('list'); // 'list' | 'new'
-  const [openId, setOpenId] = useState(null);
+// Which screen to show comes from the URL (router.js), so a refresh on a plan
+// reopens that plan rather than dropping back to the list.
+export default function Plans({ route }) {
+  const [plans, setPlans] = useState(null);
   const [error, setError] = useState('');
 
   const refresh = () => listPlans().then((d) => setPlans(d.plans)).catch((err) => setError(err.message));
   useEffect(() => {
-    refresh();
-  }, []);
+    if (!route.planId && !route.newPlan) refresh();
+  }, [route.planId, route.newPlan]);
 
-  if (openId) {
-    return (
-      <PlanDetail
-        id={openId}
-        onBack={() => {
-          setOpenId(null);
-          refresh();
-        }}
-      />
-    );
+  if (route.planId) {
+    return <PlanDetail id={route.planId} editing={route.editing} onBack={() => navigate('/')} />;
   }
 
-  if (view === 'new') {
-    return (
-      <NewPlan
-        onCreated={(id) => {
-          setView('list');
-          setOpenId(id);
-        }}
-        onCancel={() => setView('list')}
-      />
-    );
+  if (route.newPlan) {
+    return <NewPlan onCreated={(id) => navigate(`/plans/${id}`)} onCancel={() => navigate('/')} />;
   }
 
   return (
     <section>
       <div className="page-head">
         <h2>Your plans</h2>
-        <button type="button" className="primary" onClick={() => setView('new')}>+ New plan</button>
+        <button type="button" className="primary" onClick={() => navigate('/plans/new')}>+ New plan</button>
       </div>
       {error && <p className="notice">{error}</p>}
 
-      {plans.length === 0 && (
+      {plans && plans.length === 0 && (
         <div className="empty">
           <p className="empty-title">Nothing planned yet</p>
           <p className="muted">
-            Start a plan, say what you're in the mood for, and invite friends — everyone shares where they are, and
+            Start a plan, say what you're in the mood for, and invite friends. Everyone shares where they are, and
             midpoint finds a spot that's fair for all of you.
           </p>
-          <button type="button" className="primary" onClick={() => setView('new')}>Make your first plan</button>
+          <button type="button" className="primary" onClick={() => navigate('/plans/new')}>Make your first plan</button>
         </div>
       )}
 
       <div className="plan-cards">
-        {plans.map((p) => {
+        {(plans || []).map((p) => {
           const status = planStatus(p);
           const shown = Math.min(p.participant_count, 5);
           return (
-            <button key={p.id} type="button" className="plan-card" onClick={() => setOpenId(p.id)}>
+            <button key={p.id} type="button" className="plan-card" onClick={() => navigate(`/plans/${p.id}`)}>
               <div className="plan-card-head">
                 <span className="plan-card-title">{p.title}</span>
                 <span className={`status-chip status-${status.kind}`}>{status.text}</span>

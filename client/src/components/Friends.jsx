@@ -54,7 +54,7 @@ export default function Friends() {
         <p className="card-title">Add people</p>
         {data.inviteToken && (
           <InviteLinkBox
-            label="Your invite link — send it to anyone; once they sign in, you get a friend request"
+            label="Your invite link. Send it to anyone; once they sign in, you get a friend request"
             url={`${window.location.origin}/add-friend/${data.inviteToken}`}
           />
         )}

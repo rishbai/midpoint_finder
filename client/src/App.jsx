@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { getMeta } from './api.js';
 import { AuthProvider, useAuth } from './auth.jsx';
 import { initial } from './format.js';
+import { navigate, parsePath, usePath } from './router.js';
 import { EMPTY_FILTERS } from './components/Filters.jsx';
 import Avatar from './components/Avatar.jsx';
 import SearchView from './components/SearchView.jsx';
@@ -72,7 +73,7 @@ function AccountWidget() {
   );
 }
 
-// What someone sees on Plans/Friends before they're signed in — a reason to,
+// What someone sees on Plans/Friends before they're signed in: a reason to,
 // not just a form.
 function Welcome({ prompt }) {
   return (
@@ -81,18 +82,23 @@ function Welcome({ prompt }) {
       <h2 className="welcome-title">Pick a spot that's fair for everyone.</h2>
       <p className="muted">
         Make a plan, say what you're in the mood for, invite friends. Everyone shares where they're coming from, and
-        midpoint finds places that are a fair trip for all of you — by train, bus, or on foot.
+        midpoint finds places that are a fair trip for all of you, whether that's by train, bus, car, or on foot.
       </p>
       <AuthPanel prompt={prompt} />
     </div>
   );
 }
 
-function AppShell() {
+const TABS = [
+  { key: 'plans', label: 'Plans', path: '/' },
+  { key: 'search', label: 'Find a spot', path: '/search' },
+  { key: 'friends', label: 'Friends', path: '/friends' },
+];
+
+function AppShell({ route }) {
   const { user, loading } = useAuth();
   const [meta, setMeta] = useState({ categories: [], vibes: [], cuisines: [] });
   const [filters, setFilters] = useState(EMPTY_FILTERS);
-  const [tab, setTab] = useState('plans');
 
   useEffect(() => {
     getMeta().then(setMeta).catch(() => {});
@@ -101,40 +107,40 @@ function AppShell() {
   return (
     <div className="app">
       <header className="sign">
-        <h1>midpoint</h1>
-        <nav className="tabs" aria-label="Mode">
-          <button aria-pressed={tab === 'plans'} onClick={() => setTab('plans')}>
-            Plans
-          </button>
-          <button aria-pressed={tab === 'search'} onClick={() => setTab('search')}>
-            Find a spot
-          </button>
-          <button aria-pressed={tab === 'friends'} onClick={() => setTab('friends')}>
-            Friends
-          </button>
+        <h1>
+          <a href="/" onClick={(e) => { e.preventDefault(); navigate('/'); }}>midpoint</a>
+        </h1>
+        <nav className="tabs" aria-label="Sections">
+          {TABS.map((t) => (
+            <button key={t.key} aria-pressed={route.tab === t.key} onClick={() => navigate(t.path)}>
+              {t.label}
+            </button>
+          ))}
         </nav>
         <AccountWidget />
       </header>
 
       <div className="layout">
         <main className="full">
-          {tab === 'plans' && (loading ? null : user ? <Plans /> : <Welcome prompt="Sign in to make plans with friends." />)}
-          {tab === 'search' && <SearchView meta={meta} filters={filters} onFilters={setFilters} />}
-          {tab === 'friends' && (loading ? null : user ? <Friends /> : <Welcome prompt="Sign in to add friends." />)}
+          {route.tab === 'plans' &&
+            (loading ? null : user ? <Plans route={route} /> : <Welcome prompt="Sign in to make plans with friends." />)}
+          {route.tab === 'search' && <SearchView meta={meta} filters={filters} onFilters={setFilters} />}
+          {route.tab === 'friends' &&
+            (loading ? null : user ? <Friends /> : <Welcome prompt="Sign in to add friends." />)}
         </main>
       </div>
     </div>
   );
 }
 
-// No router dependency for just two deep links: a plan's invite URL
-// (/join/:token) and a personal friend-invite URL (/add-friend/:token).
-// Everything else is the normal tabbed app.
+// Two pages live outside the app chrome: a plan's invite link and a personal
+// friend-invite link. Everything else is the tabbed app, driven by the URL
+// (see router.js) so a refresh stays where you were.
 const JOIN_PATH = /^\/join\/([a-zA-Z0-9]+)\/?$/;
 const ADD_FRIEND_PATH = /^\/add-friend\/([a-zA-Z0-9]+)\/?$/;
 
 export default function App() {
-  const path = window.location.pathname;
+  const path = usePath();
   const joinToken = path.match(JOIN_PATH)?.[1];
   const friendToken = path.match(ADD_FRIEND_PATH)?.[1];
 
@@ -145,7 +151,7 @@ export default function App() {
       ) : friendToken ? (
         <AddFriend token={friendToken} />
       ) : (
-        <AppShell />
+        <AppShell route={parsePath(path)} />
       )}
     </AuthProvider>
   );

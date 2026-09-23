@@ -9,7 +9,7 @@ export default function NewPlan({ onCreated, onCancel }) {
 
   return (
     <section>
-      <button type="button" className="link" onClick={onCancel}>&larr; Your plans</button>
+      <button type="button" className="link back" onClick={onCancel}>&larr; Your plans</button>
       <div className="page-head">
         <h2>New plan</h2>
       </div>

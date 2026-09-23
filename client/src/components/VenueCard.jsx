@@ -1,6 +1,6 @@
-import { label, price, dealLabel } from '../format.js';
+import { label, price, dealLabel, mapsUrl } from '../format.js';
 
-// Google's 5-star rating, rescaled to a 0-10 score badge (Beli-style).
+// Google's 5-star rating, rescaled to a 0-10 score badge.
 function scoreClass(score) {
   if (score >= 8.5) return 'score-great';
   if (score >= 7) return 'score-good';
@@ -28,12 +28,15 @@ export default function VenueCard({ venue, children }) {
           {venue.rating_count ? (
             <span className="muted small">({venue.rating_count.toLocaleString()})</span>
           ) : null}
+          <a className="venue-link" href={mapsUrl(venue)} target="_blank" rel="noopener noreferrer">
+            Open in Google Maps
+          </a>
         </div>
         <p className="details">{details}</p>
         <p className="address">{venue.address}</p>
         {venue.description ? (
           // Grounded in this venue's actual reviews and what was asked for
-          // (see server/src/services/describe.js) — takes priority over the
+          // (see server/src/services/describe.js). Takes priority over the
           // generic dish/vibe line below since it's more specific.
           <p className="highlight">{venue.description}</p>
         ) : (

@@ -62,7 +62,7 @@ const searchLimiter = rateLimit({
   limit: 40,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: 'That is a lot of searching — give it a few minutes.' },
+  message: { error: 'That is a lot of searching. Give it a few minutes.' },
 });
 app.use('/api/meetup', searchLimiter);
 app.use(/^\/api\/plans\/[^/]+\/(results|routes)/, searchLimiter);

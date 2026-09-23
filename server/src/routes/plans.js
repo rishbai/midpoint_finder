@@ -10,6 +10,7 @@ import {
   deletePlan,
   inviteToPlan,
   leavePlan,
+  removeParticipant,
   respondToPlan,
   shareLocation,
   computePlanResults,
@@ -139,6 +140,15 @@ plansRouter.post('/plans/:id/leave', requireAuth, (req, res, next) => {
   try {
     leavePlan(req.params.id, req.user.id);
     res.status(204).end();
+  } catch (err) {
+    next(err);
+  }
+});
+
+plansRouter.delete('/plans/:id/participants/:userId', requireAuth, (req, res, next) => {
+  try {
+    const plan = removeParticipant(req.params.id, req.user.id, req.params.userId);
+    res.json({ plan });
   } catch (err) {
     next(err);
   }

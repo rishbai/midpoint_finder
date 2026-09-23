@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { searchVenues, parseQuery } from '../api.js';
 import { summarizeFilters } from '../format.js';
 import Filters, { EMPTY_FILTERS } from './Filters.jsx';
+import LoadingOverlay from './LoadingOverlay.jsx';
 import VenueCard from './VenueCard.jsx';
 
 export default function SearchView({ meta, filters, onFilters }) {
@@ -53,6 +54,7 @@ export default function SearchView({ meta, filters, onFilters }) {
 
   return (
     <section>
+      {parsing && <LoadingOverlay label="Reading what you're looking for" />}
       <form className="ask" onSubmit={submitAsk}>
         <input
           type="text"
@@ -74,7 +76,7 @@ export default function SearchView({ meta, filters, onFilters }) {
         <>
           <p className="count">
             {status === 'loading' ? 'Searching' : `${results.length} places`}
-            {interpreted && ` — showing ${interpreted}`}
+            {interpreted && `, showing ${interpreted}`}
           </p>
           {status === 'done' && results.length === 0 && (
             <p className="notice">Nothing matches. Remove a filter or two.</p>

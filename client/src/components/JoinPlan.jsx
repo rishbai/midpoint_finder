@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { getPlanPreview, joinPlan } from '../api.js';
 import { useAuth } from '../auth.jsx';
-import { ALL_TRAVEL_MODES } from '../format.js';
+import LoadingOverlay from './LoadingOverlay.jsx';
 import TravelModes from './TravelModes.jsx';
 
-// The page a plan's invite link opens to — no login required. A signed-in
+// The page a plan's invite link opens to. No login required: a signed-in
 // visitor (real account or an existing guest) joins with one click; an
 // anonymous visitor just gives a name and gets a lightweight guest account.
 export default function JoinPlan({ token }) {
@@ -13,11 +13,10 @@ export default function JoinPlan({ token }) {
   const [name, setName] = useState('');
   // Asked here because this is the one moment we have a new person's
   // attention, and their answer is what makes their travel times honest.
-  // It applies to this plan only — joining another one asks again.
-  const [travelModes, setTravelModes] = useState(ALL_TRAVEL_MODES);
+  // Starts empty on purpose: picking how you'll get there is a decision.
+  const [travelModes, setTravelModes] = useState([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const [joined, setJoined] = useState(false);
 
   useEffect(() => {
     getPlanPreview(token)
@@ -27,14 +26,14 @@ export default function JoinPlan({ token }) {
 
   async function submit(e) {
     e.preventDefault();
+    if (!travelModes.length) return;
     setBusy(true);
     setError('');
     try {
-      await joinPlan(token, name.trim(), travelModes);
-      setJoined(true);
-      // Full reload so the auth/session state (new guest cookie, if any) is
-      // picked up cleanly — lands on Plans, where the joined plan now shows.
-      window.location.href = '/';
+      const { plan } = await joinPlan(token, name.trim(), travelModes);
+      // Full reload so the session (a new guest cookie, if any) is picked up
+      // cleanly, landing straight on the plan just joined.
+      window.location.href = `/plans/${plan.id}`;
     } catch (err) {
       setError(err.message);
       setBusy(false);
@@ -55,18 +54,19 @@ export default function JoinPlan({ token }) {
   if (!preview || authLoading) {
     return (
       <div className="app">
-        <div className="join-screen">
-          <h1>midpoint</h1>
-          <p className="count">Loading…</p>
-        </div>
+        <LoadingOverlay label="Opening your invite" />
       </div>
     );
   }
 
+  const ready = travelModes.length > 0 && (user || name.trim());
+
   return (
     <div className="app">
+      {busy && <LoadingOverlay label="Joining the plan" />}
       <div className="join-screen">
         <h1>midpoint</h1>
+        <p className="welcome-kicker">You're invited</p>
         <h2>{preview.title}</h2>
         <p className="muted">
           Hosted by {preview.hostName} · {preview.participantCount} {preview.participantCount === 1 ? 'person' : 'people'} so far
@@ -89,14 +89,15 @@ export default function JoinPlan({ token }) {
           <div className="form-section">
             <span className="form-label">How will you get there?</span>
             <span className="form-hint">
-              So the spot that gets picked is a fair trip for you too. Just for this plan — turn off
-              anything you'd rather not take.
+              Pick everything you'd be happy to take. The spot that gets chosen is a fair trip for you by
+              these, and it only applies to this plan.
             </span>
             <TravelModes value={travelModes} onChange={setTravelModes} />
+            {!travelModes.length && <span className="form-hint">Choose at least one to join.</span>}
           </div>
           {error && <p className="notice">{error}</p>}
-          <button type="submit" className="primary" disabled={busy || joined}>
-            {busy || joined ? 'Joining…' : user ? `Join as ${user.name}` : 'Join'}
+          <button type="submit" className="primary" disabled={busy || !ready}>
+            {user ? `Join as ${user.name}` : 'Join'}
           </button>
         </form>
       </div>

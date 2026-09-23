@@ -6,6 +6,7 @@ import {
   invitePlan,
   addPersonToPlan,
   setPlanTravelModes,
+  removeFromPlan,
   leavePlan,
   respondToPlan,
   sharePlanLocation,
@@ -14,17 +15,11 @@ import {
   getFriends,
 } from '../api.js';
 import { useAuth } from '../auth.jsx';
-import {
-  modeIcon,
-  vehicleLabel,
-  formatWhen,
-  initial,
-  travelModeIcons,
-  travelModeSummary,
-  ALL_TRAVEL_MODES,
-} from '../format.js';
+import { modeWord, vehicleLabel, formatWhen, initial, travelModeSummary } from '../format.js';
+import { navigate } from '../router.js';
 import Avatar from './Avatar.jsx';
 import InviteLinkBox from './InviteLinkBox.jsx';
+import LoadingOverlay from './LoadingOverlay.jsx';
 import PlanForm from './PlanForm.jsx';
 import PlanMap from './PlanMap.jsx';
 import RouteMap from './RouteMap.jsx';
@@ -82,9 +77,10 @@ function InvitePanel({ plan, onInvited, onClose }) {
 
   return (
     <div className="card">
+      {busy && <LoadingOverlay label="Sending invites" />}
       <p className="card-title">Invite friends</p>
       {invitable.length === 0 ? (
-        <p className="form-hint">Everyone you know is already on this plan — share the invite link for anyone else.</p>
+        <p className="form-hint">Everyone you know is already on this plan. Share the invite link for anyone else.</p>
       ) : (
         <div className="people-picker">
           {invitable.map((f, i) => (
@@ -105,25 +101,26 @@ function InvitePanel({ plan, onInvited, onClose }) {
       <div className="people-actions">
         <button type="button" className="link" onClick={onClose}>Cancel</button>
         <button type="button" className="primary" onClick={submit} disabled={busy || selected.length === 0}>
-          {busy ? 'Inviting' : 'Send invites'}
+          Send invites
         </button>
       </div>
     </div>
   );
 }
 
-// Someone who isn't signing up for anything — the host gives a name and
-// where they're coming from. Useful for family: half of them will never make
+// Someone who isn't signing up for anything: the host gives a name and where
+// they're coming from. Useful for family, since half of them will never make
 // an account, but they still have to count in "fair for everyone".
 function AddPersonPanel({ onAdd, onClose }) {
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
-  const [travelModes, setTravelModes] = useState(ALL_TRAVEL_MODES);
+  const [travelModes, setTravelModes] = useState([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
   async function submit(e) {
     e.preventDefault();
+    if (!travelModes.length) return;
     setBusy(true);
     setError('');
     try {
@@ -137,6 +134,7 @@ function AddPersonPanel({ onAdd, onClose }) {
 
   return (
     <form className="card" onSubmit={submit}>
+      {busy && <LoadingOverlay label={`Adding ${name.trim() || 'them'} to the plan`} />}
       <p className="card-title">Add someone without an account</p>
       <label>
         <span className="form-label">Their name</span>
@@ -148,19 +146,24 @@ function AddPersonPanel({ onAdd, onClose }) {
           type="text"
           value={address}
           onChange={(e) => setAddress(e.target.value)}
-          placeholder="Cary, NC"
+          placeholder="An address, cross streets, or a town"
           required
         />
       </label>
       <div className="form-section">
         <span className="form-label">How they'll get there</span>
         <TravelModes value={travelModes} onChange={setTravelModes} />
+        {!travelModes.length && <span className="form-hint">Pick at least one.</span>}
       </div>
       {error && <p className="notice">{error}</p>}
       <div className="people-actions">
         <button type="button" className="link" onClick={onClose}>Cancel</button>
-        <button type="submit" className="primary" disabled={busy || !name.trim() || !address.trim()}>
-          {busy ? 'Adding' : 'Add to plan'}
+        <button
+          type="submit"
+          className="primary"
+          disabled={busy || !name.trim() || !address.trim() || !travelModes.length}
+        >
+          Add to plan
         </button>
       </div>
     </form>
@@ -168,74 +171,77 @@ function AddPersonPanel({ onAdd, onClose }) {
 }
 
 // One person's modes for THIS plan. The same person takes the subway at home
-// and drives when they're visiting family, so it belongs to the trip rather
-// than to them — there's deliberately no account-wide version of this.
+// and drives when visiting family, so it belongs to the trip rather than to
+// them. Edited as a draft and saved deliberately, so an empty pick is never
+// sent by accident: choosing how you'll travel is a decision, not a default.
 function ParticipantTravel({ person, canEdit, onChange }) {
   const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState([]);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  const icons = travelModeIcons(person.travelModes);
-  const summary = travelModeSummary(person.travelModes);
-  // Nobody has said, so ranking is assuming they'll take anything. True by
-  // default, which is fine — but worth offering rather than hiding.
+  // "Set" means someone actually said; otherwise ranking assumes any way.
   const unset = !person.travelModesSet;
+  const summary = unset ? null : travelModeSummary(person.travelModes);
 
   if (!canEdit) {
-    return (
-      <span className="travel-static" title={summary || 'Any way of getting there'}>
-        <span aria-hidden="true">{icons}</span>
-        <span className="sr-only">{summary || 'Any way of getting there'}</span>
-      </span>
-    );
+    return <span className="travel-static">{summary || 'Any way of getting there'}</span>;
   }
 
-  async function change(modes) {
+  function begin() {
+    setDraft(unset ? [] : person.travelModes);
+    setError('');
+    setOpen(true);
+  }
+
+  async function save() {
+    if (!draft.length) return;
+    setSaving(true);
     setError('');
     try {
-      await onChange(modes);
+      await onChange(draft);
+      setOpen(false);
     } catch (err) {
       setError(err.message);
+    } finally {
+      setSaving(false);
     }
   }
 
-  const who = person.isMe ? 'you' : person.name;
+  const subject = person.isMe ? 'you' : person.name;
   return (
     <span className="participant-travel">
       <button
         type="button"
         className={`travel-chip${unset ? ' travel-chip-unset' : ''}`}
         aria-expanded={open}
-        onClick={() => setOpen(!open)}
+        onClick={() => (open ? setOpen(false) : begin())}
       >
-        {unset ? (
-          person.isMe ? 'How are you getting there?' : `How is ${person.name} getting there?`
-        ) : (
-          <>
-            <span aria-hidden="true">{icons}</span>
-            <span className="travel-chip-text">{summary || 'Any way'}</span>
-          </>
-        )}
+        {unset ? `How ${person.isMe ? 'are you' : `is ${person.name}`} getting there?` : summary}
       </button>
       {open && (
         <span className="travel-popover">
-          <span className="form-label">
-            How {person.isMe ? 'are you' : `is ${person.name}`} getting there?
-          </span>
+          <span className="form-label">How {person.isMe ? 'are you' : `is ${person.name}`} getting there?</span>
           <span className="form-hint">
-            Just for this plan — {who === 'you' ? 'your' : `${person.name}'s`} travel times are worked
-            out from this, and other plans are unaffected.
+            Pick everything {subject === 'you' ? "you'd" : `${person.name} would`} be happy to take.
+            Just for this plan; other plans are unaffected.
           </span>
-          <TravelModes value={person.travelModes} onChange={change} />
+          <TravelModes value={draft} onChange={setDraft} disabled={saving} />
           {error && <span className="notice">{error}</span>}
-          <button type="button" className="link" onClick={() => setOpen(false)}>Done</button>
+          <span className="people-actions">
+            <button type="button" className="link" onClick={() => setOpen(false)} disabled={saving}>Cancel</button>
+            <button type="button" className="primary small-btn" onClick={save} disabled={saving || !draft.length}>
+              {saving ? 'Saving' : 'Save'}
+            </button>
+          </span>
         </span>
       )}
     </span>
   );
 }
 
-// Step-by-step directions to one venue, per person — fetched lazily on
-// first expand, not for every venue in the results list.
+// Step-by-step directions to one venue, per person. Fetched lazily on first
+// expand, not for every venue in the results list.
 function RouteDetail({ planId, venue, participants, peopleForMap }) {
   const [open, setOpen] = useState(false);
   const [data, setData] = useState(null);
@@ -275,7 +281,11 @@ function RouteDetail({ planId, venue, participants, peopleForMap }) {
       </button>
       {open && (
         <div className="route-detail">
-          {loading && <p className="notice">Looking up directions…</p>}
+          {loading && (
+            <p className="inline-loading">
+              <span className="spinner spinner-sm" aria-hidden="true" /> Looking up directions
+            </p>
+          )}
           {error && <p className="notice">{error}</p>}
           {data && (
             <RouteMap
@@ -295,7 +305,7 @@ function RouteDetail({ planId, venue, participants, peopleForMap }) {
                   <Avatar index={personIndex} /> <strong>{r.name}</strong>
                   <span className="muted">
                     {' '}
-                    — {modeIcon(r.mode)} {r.minutes != null ? `${r.minutes} min` : 'no route found'}
+                    {r.minutes != null ? `${r.minutes} min ${modeWord(r.mode)}` : 'no route found'}
                   </span>
                 </p>
                 <ul className="route-steps">
@@ -312,19 +322,30 @@ function RouteDetail({ planId, venue, participants, peopleForMap }) {
   );
 }
 
-export default function PlanDetail({ id, onBack }) {
+// The one thing the plan needs next, so nobody has to work out the order.
+function nextStep({ plan, me, isHost, sharedCount, results }) {
+  if (me?.status === 'invited') return null; // the join card handles this
+  if (me && !me.hasLocation) return 'Share where you\'re coming from so the spots are fair for you too.';
+  const others = plan.participants.filter((p) => p.status !== 'declined').length;
+  if (others < 2) return isHost ? 'Invite someone, or add them by address, to have a middle to find.' : null;
+  if (sharedCount < 2) return 'Waiting on others to share their location.';
+  if (!results) return 'Everyone needed is in. Find spots when you\'re ready.';
+  return null;
+}
+
+export default function PlanDetail({ id, editing, onBack }) {
   const { user } = useAuth();
   const [plan, setPlan] = useState(null);
-  const [mode, setMode] = useState('view'); // 'view' | 'edit'
   const [error, setError] = useState('');
   const [address, setAddress] = useState('');
-  const [busy, setBusy] = useState(false);
+  const [busyLabel, setBusyLabel] = useState('');
   const [results, setResults] = useState(null);
   const [resultsError, setResultsError] = useState('');
   const [loadingResults, setLoadingResults] = useState(false);
   const [inviting, setInviting] = useState(false);
   const [addingPerson, setAddingPerson] = useState(false);
   const [showLink, setShowLink] = useState(false);
+  const busy = Boolean(busyLabel);
 
   const refresh = useCallback(
     () => getPlan(id).then((d) => setPlan(d.plan)).catch((err) => setError(err.message)),
@@ -343,8 +364,15 @@ export default function PlanDetail({ id, onBack }) {
     return () => clearInterval(timer);
   }, [plan, refresh]);
 
-  if (error && !plan) return <p className="notice">{error}</p>;
-  if (!plan) return <p className="count">Loading</p>;
+  if (error && !plan) {
+    return (
+      <section>
+        <button type="button" className="link back" onClick={onBack}>&larr; Your plans</button>
+        <p className="notice">{error}</p>
+      </section>
+    );
+  }
+  if (!plan) return <LoadingOverlay label="Opening the plan" />;
 
   const isHost = plan.hostId === user.id;
   const me = plan.participants.find((p) => p.userId === user.id);
@@ -361,63 +389,66 @@ export default function PlanDetail({ id, onBack }) {
     .slice(0, 8)
     .map((r) => ({ lat: r.venue.lat, lng: r.venue.lng, name: r.venue.name }));
 
-  async function respond(action) {
-    setBusy(true);
+  // Every write to the plan goes through here so the overlay label is always
+  // right and nothing can be double-submitted while one is in flight.
+  async function run(label, fn) {
+    setBusyLabel(label);
     setError('');
     try {
-      setPlan((await respondToPlan(id, action)).plan);
+      await fn();
     } catch (err) {
       setError(err.message);
     } finally {
-      setBusy(false);
+      setBusyLabel('');
     }
   }
+
+  // Old results were computed from old inputs. Showing them next to an
+  // updated pin on the map would be actively misleading.
+  function applyPlan(updated) {
+    setPlan(updated);
+    setResults(null);
+    setResultsError('');
+  }
+
+  const respond = (action) => run(action === 'joined' ? 'Joining' : 'Declining', async () => {
+    applyPlan((await respondToPlan(id, action)).plan);
+  });
 
   function shareGeolocation() {
     if (!navigator.geolocation) {
       setError("Your browser can't share location. Type an address instead.");
       return;
     }
+    setBusyLabel('Finding your location');
     setError('');
-    setBusy(true);
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         try {
           const { latitude: lat, longitude: lng } = pos.coords;
-          setPlan((await sharePlanLocation(id, { lat, lng })).plan);
-          // Old results were computed from the old location — showing them
-          // next to an updated pin on the map would be actively misleading.
-          setResults(null);
-          setResultsError('');
+          setBusyLabel('Saving your location');
+          applyPlan((await sharePlanLocation(id, { lat, lng })).plan);
         } catch (err) {
           setError(err.message);
         } finally {
-          setBusy(false);
+          setBusyLabel('');
         }
       },
       () => {
         setError('Location sharing was blocked. Type an address instead.');
-        setBusy(false);
+        setBusyLabel('');
       }
     );
   }
 
-  async function shareAddress(e) {
+  const shareAddress = (e) => {
     e.preventDefault();
     if (!address.trim()) return;
-    setBusy(true);
-    setError('');
-    try {
-      setPlan((await sharePlanLocation(id, { address: address.trim() })).plan);
+    run('Saving your location', async () => {
+      applyPlan((await sharePlanLocation(id, { address: address.trim() })).plan);
       setAddress('');
-      setResults(null);
-      setResultsError('');
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setBusy(false);
-    }
-  }
+    });
+  };
 
   async function loadResults() {
     setLoadingResults(true);
@@ -442,39 +473,37 @@ export default function PlanDetail({ id, onBack }) {
     if (data.friendIds.length) {
       finalPlan = (await invitePlan(id, data.friendIds)).plan;
     }
-    setPlan(finalPlan);
-    setMode('view');
-    setResults(null);
+    applyPlan(finalPlan);
+    navigate(`/plans/${id}`);
   }
 
-  async function removePlan() {
+  const removePlan = () => {
     if (!window.confirm(`Delete "${plan.title}"? This can't be undone.`)) return;
-    setBusy(true);
-    try {
+    run('Deleting the plan', async () => {
       await deletePlan(id);
       onBack();
-    } catch (err) {
-      setError(err.message);
-      setBusy(false);
-    }
-  }
+    });
+  };
 
-  async function leave() {
+  const leave = () => {
     if (!window.confirm('Leave this plan?')) return;
-    setBusy(true);
-    try {
+    run('Leaving the plan', async () => {
       await leavePlan(id);
       onBack();
-    } catch (err) {
-      setError(err.message);
-      setBusy(false);
-    }
-  }
+    });
+  };
 
-  if (mode === 'edit') {
+  const removePerson = (p) => {
+    if (!window.confirm(`Remove ${p.name} from this plan?`)) return;
+    run(`Removing ${p.name}`, async () => {
+      applyPlan((await removeFromPlan(id, p.userId)).plan);
+    });
+  };
+
+  if (editing) {
     return (
       <section>
-        <button type="button" className="link" onClick={() => setMode('view')}>&larr; Back to plan</button>
+        <button type="button" className="link back" onClick={() => navigate(`/plans/${id}`)}>&larr; Back to plan</button>
         <div className="page-head">
           <h2>Edit plan</h2>
         </div>
@@ -482,23 +511,28 @@ export default function PlanDetail({ id, onBack }) {
           initial={plan}
           existingParticipantIds={plan.participants.map((p) => p.userId)}
           onSubmit={saveEdit}
-          onCancel={() => setMode('view')}
+          onCancel={() => navigate(`/plans/${id}`)}
           submitLabel="Save changes"
         />
       </section>
     );
   }
 
+  const hint = nextStep({ plan, me, isHost, sharedCount, results });
+
   return (
     <div className="plan-detail">
-      <button type="button" className="link" onClick={onBack}>&larr; Your plans</button>
+      {busy && <LoadingOverlay label={busyLabel} />}
+      {loadingResults && <LoadingOverlay label="Finding spots that work for everyone" />}
+
+      <button type="button" className="link back" onClick={onBack}>&larr; Your plans</button>
 
       <header className="plan-hero">
         <div className="plan-hero-head">
           <h2>{plan.title}</h2>
           {isHost && (
             <div className="plan-actions">
-              <button type="button" className="ghost" onClick={() => setMode('edit')}>Edit</button>
+              <button type="button" className="ghost" onClick={() => navigate(`/plans/${id}/edit`)}>Edit</button>
               <button type="button" className="ghost danger" onClick={removePlan} disabled={busy}>Delete</button>
             </div>
           )}
@@ -508,6 +542,7 @@ export default function PlanDetail({ id, onBack }) {
           {plan.plannedFor && <span className="meta-chip">{formatWhen(plan.plannedFor)}</span>}
           {host && !isHost && <span className="meta-chip muted">Hosted by {host.name}</span>}
         </div>
+        {hint && <p className="next-step">{hint}</p>}
       </header>
 
       {me?.status === 'invited' && (
@@ -544,51 +579,54 @@ export default function PlanDetail({ id, onBack }) {
         <ul className="people-list">
           {plan.participants.map((p, i) => {
             const status = participantStatus(p);
+            const isMe = p.userId === user.id;
             return (
               <li key={p.userId} className="person-row">
-                <Avatar index={i} />
+                <Avatar index={i} label={initial(p.name)} />
                 <div className="person-main">
                   <span className="person-line">
                     <span className="person-name">{p.name}</span>
-                    {p.userId === user.id && <span className="role-tag">you</span>}
+                    {isMe && <span className="role-tag">you</span>}
                     {p.userId === plan.hostId && <span className="role-tag">host</span>}
                     {p.addedByHost && <span className="role-tag">no account</span>}
+                    {p.address && <span className="muted small person-from">from {p.address}</span>}
                   </span>
                   <ParticipantTravel
-                    person={{ ...p, isMe: p.userId === user.id }}
-                    canEdit={p.userId === user.id || (isHost && p.addedByHost)}
+                    person={{ ...p, isMe }}
+                    canEdit={isMe || (isHost && p.addedByHost)}
                     onChange={async (modes) => {
-                      const { plan: updated } = await setPlanTravelModes(id, p.userId, modes);
-                      setPlan(updated);
-                      setResults(null); // times were priced under the old preference
+                      applyPlan((await setPlanTravelModes(id, p.userId, modes)).plan);
                     }}
                   />
                 </div>
-                <span className={`status-chip status-${status.kind}`}>{status.text}</span>
+                <span className="person-side">
+                  <span className={`status-chip status-${status.kind}`}>{status.text}</span>
+                  {isHost && !isMe && (
+                    <button type="button" className="link danger small" onClick={() => removePerson(p)} disabled={busy}>
+                      Remove
+                    </button>
+                  )}
+                </span>
               </li>
             );
           })}
         </ul>
         {showLink && (
           <InviteLinkBox
-            label="Anyone with this link can join — no account needed"
+            label="Anyone with this link can join. No account needed."
             url={`${window.location.origin}/join/${plan.shareToken}`}
           />
         )}
         {inviting && (
           <InvitePanel
             plan={plan}
-            onInvited={(ids) => invitePlan(id, ids).then((d) => setPlan(d.plan))}
+            onInvited={(ids) => invitePlan(id, ids).then((d) => applyPlan(d.plan))}
             onClose={() => setInviting(false)}
           />
         )}
         {addingPerson && (
           <AddPersonPanel
-            onAdd={async (person) => {
-              const { plan: updated } = await addPersonToPlan(id, person);
-              setPlan(updated);
-              setResults(null);
-            }}
+            onAdd={async (person) => applyPlan((await addPersonToPlan(id, person)).plan)}
             onClose={() => setAddingPerson(false)}
           />
         )}
@@ -602,50 +640,52 @@ export default function PlanDetail({ id, onBack }) {
         )}
 
         {me && me.status !== 'declined' && (
-          <div className="card location-card">
+          <div className={`card location-card${me.hasLocation ? '' : ' card-accent'}`}>
             <p className="card-title">
               {me.hasLocation ? 'Your starting point' : 'Where are you coming from?'}
             </p>
             {me.hasLocation && <p className="muted small">{me.address || 'Current location'}</p>}
-            <button type="button" className="primary" onClick={shareGeolocation} disabled={busy}>
-              {me.hasLocation ? 'Update my location' : 'Share my location'}
-            </button>
-            <form onSubmit={shareAddress} className="address-form">
-              <input
-                type="text"
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                placeholder="or type an address / cross streets"
-                aria-label="Address"
-              />
-              <button type="submit" className="ghost" disabled={busy || !address.trim()}>Use address</button>
-            </form>
+            <div className="location-actions">
+              <button type="button" className="primary" onClick={shareGeolocation} disabled={busy}>
+                {me.hasLocation ? 'Update my location' : 'Use my current location'}
+              </button>
+              <form onSubmit={shareAddress} className="address-form">
+                <input
+                  type="text"
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  placeholder="or type an address or cross streets"
+                  aria-label="Address"
+                />
+                <button type="submit" className="ghost" disabled={busy || !address.trim()}>Use address</button>
+              </form>
+            </div>
           </div>
         )}
       </Section>
 
-      {error && <p className="notice">{error}</p>}
+      {error && <p className="notice notice-error">{error}</p>}
 
       <Section
         title="Spots for everyone"
         action={
           canSeeResults && (
             <button type="button" className="primary" onClick={loadResults} disabled={loadingResults}>
-              {loadingResults ? 'Checking travel times…' : results ? 'Refresh spots' : 'Find spots'}
+              {results ? 'Refresh spots' : 'Find spots'}
             </button>
           )
         }
       >
         {!canSeeResults && (
           <p className="form-hint">
-            {sharedCount}/{plan.participants.length} shared their location — once at least two have, you can find spots.
+            {sharedCount} of {plan.participants.length} have shared their location. Once at least two have, you can find spots.
           </p>
         )}
         {canSeeResults && !results && !loadingResults && (
           <p className="form-hint">{sharedCount} of {plan.participants.length} are in. Ready when you are.</p>
         )}
 
-        {resultsError && <p className="notice">{resultsError}</p>}
+        {resultsError && <p className="notice notice-error">{resultsError}</p>}
         {results?.note && <p className="notice">{results.note}</p>}
 
         {results && results.results.length === 0 && (
@@ -659,15 +699,16 @@ export default function PlanDetail({ id, onBack }) {
                 <ul className="trips">
                   {r.minutes.map((m, i) => {
                     // results.people[i] is who this minutes[i]/modes[i] belongs
-                    // to — look up their position in plan.participants so the
+                    // to. Look up their position in plan.participants so the
                     // color here matches the list and map above.
+                    const person = results.people[i];
                     const personIndex = Math.max(
                       0,
-                      plan.participants.findIndex((p) => p.userId === results.people[i]?.userId)
+                      plan.participants.findIndex((p) => p.userId === person?.userId)
                     );
                     return (
-                      <li key={i}>
-                        <Avatar index={personIndex} /> {m} min {modeIcon(r.modes?.[i])}
+                      <li key={i} title={person?.name}>
+                        <Avatar index={personIndex} label={initial(person?.name)} /> {m} min {modeWord(r.modes?.[i])}
                       </li>
                     );
                   })}

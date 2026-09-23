@@ -82,6 +82,8 @@ export const setPlanTravelModes = (id, userId, travelModes) =>
     body: JSON.stringify({ travelModes }),
   });
 export const leavePlan = (id) => request(`/api/plans/${id}/leave`, { method: 'POST' });
+export const removeFromPlan = (id, userId) =>
+  request(`/api/plans/${id}/participants/${userId}`, { method: 'DELETE' });
 export const respondToPlan = (id, action) => postJson(`/api/plans/${id}/respond`, { action });
 export const sharePlanLocation = (id, body) => postJson(`/api/plans/${id}/location`, body);
 export const getPlanResults = (id) => request(`/api/plans/${id}/results`);

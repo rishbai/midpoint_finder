@@ -188,9 +188,10 @@ export function joinPlanByToken(token, { userId, name, travelModes }) {
     insertParticipant.run(plan.id, finalUserId, 'joined');
   }
   // The answer given on the way in is about this trip, so it's stored on the
-  // participation — joining a different plan later asks again, because the
-  // answer really can be different there.
-  if (travelModes !== undefined) {
+  // participation; joining a different plan later asks again, because the
+  // answer really can be different there. An empty answer is no answer: it
+  // stays unset, so the plan keeps asking rather than quietly assuming.
+  if (Array.isArray(travelModes) && travelModes.length) {
     setParticipantTravelModesStmt.run(
       JSON.stringify(normalizeTravelModes(travelModes)),
       plan.id,
@@ -263,6 +264,9 @@ export function setParticipantTravelModes(planId, actorId, targetUserId, travelM
   const mine = actorId === targetUserId;
   const hostManaging = plan.host_id === actorId && target.added_by_host;
   if (!mine && !hostManaging) throw forbidden("You can only change how you're getting there.");
+  // A deliberate edit has to say something. normalizeTravelModes would turn
+  // nothing into "everything", which is the one thing an edit never means.
+  if (!Array.isArray(travelModes) || !travelModes.length) throw badRequest('Pick at least one way of getting there.');
 
   setParticipantTravelModesStmt.run(JSON.stringify(normalizeTravelModes(travelModes)), planId, targetUserId);
   clearResolvedModes.run(planId); // times were priced under the old preference
@@ -360,9 +364,31 @@ export function inviteToPlan(planId, userId, friendIds = []) {
 export function leavePlan(planId, userId) {
   const plan = getPlanRow.get(planId);
   if (!plan) throw notFound('Plan not found.');
-  if (plan.host_id === userId) throw badRequest("The host can't leave — delete the plan instead.");
+  if (plan.host_id === userId) throw badRequest("The host can't leave. Delete the plan instead.");
   const result = deleteParticipant.run(planId, userId);
   if (result.changes === 0) throw forbidden("You're not part of this plan.");
+}
+
+// The host taking someone off the plan: a wrong invite, a friend who can't
+// make it, a placeholder added by mistake. A placeholder person has no
+// account of their own to keep, so it goes with them.
+const deleteUser = db.prepare('DELETE FROM users WHERE id = ? AND is_guest = 1');
+
+export function removeParticipant(planId, hostId, targetUserId) {
+  const plan = getPlanRow.get(planId);
+  if (!plan) throw notFound('Plan not found.');
+  if (plan.host_id !== hostId) throw forbidden('Only the host can remove people from this plan.');
+  if (targetUserId === hostId) throw badRequest("You can't remove yourself. Delete the plan instead.");
+
+  const target = getParticipant.get(planId, targetUserId);
+  if (!target) throw notFound("That person isn't on this plan.");
+
+  db.transaction(() => {
+    deleteParticipant.run(planId, targetUserId);
+    if (target.added_by_host) deleteUser.run(targetUserId);
+    clearResolvedModes.run(planId); // results were computed with them in it
+  })();
+  return getPlan(planId, hostId);
 }
 
 export function respondToPlan(planId, userId, action) {

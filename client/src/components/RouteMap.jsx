@@ -44,7 +44,7 @@ export default function RouteMap({ people, venue, routes }) {
           : { color, weight: 3, opacity: 0.7, dashArray: WALK_DASH }
         );
         if (isTransit && step.transit.line) {
-          line.bindTooltip(`${step.transit.line} — ${step.transit.from} to ${step.transit.to}`);
+          line.bindTooltip(`${step.transit.line}: ${step.transit.from} to ${step.transit.to}`);
         }
         line.addTo(map);
         layers.push(line);

@@ -62,13 +62,13 @@ export default function AddFriend({ token }) {
         <h2>{preview.inviterName} wants to connect</h2>
 
         {sent ? (
-          <p className="notice">Request sent — {preview.inviterName} will see it in their Friends tab.</p>
+          <p className="notice">Request sent. {preview.inviterName} will see it in their Friends tab.</p>
         ) : user ? (
           <>
             <p className="muted">Signed in as {user.name}.</p>
             {error && <p className="notice">{error}</p>}
             <button type="button" className="primary" onClick={send} disabled={busy}>
-              {busy ? 'Sending…' : 'Send friend request'}
+              {busy ? 'Sending' : 'Send friend request'}
             </button>
           </>
         ) : (

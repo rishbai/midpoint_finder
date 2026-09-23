@@ -3,6 +3,7 @@ import { parseQuery, getFriends, getMeta } from '../api.js';
 import { summarizeFilters, initial } from '../format.js';
 import Avatar from './Avatar.jsx';
 import Filters, { EMPTY_FILTERS } from './Filters.jsx';
+import LoadingOverlay from './LoadingOverlay.jsx';
 
 function toLocalInput(iso) {
   if (!iso) return '';
@@ -82,6 +83,8 @@ export default function PlanForm({ initial: initialPlan, existingParticipantIds 
 
   return (
     <form onSubmit={submit} className="plan-form">
+      {parsing && <LoadingOverlay label="Reading your description" />}
+      {busy && !parsing && <LoadingOverlay label={editing ? 'Saving changes' : 'Creating your plan'} />}
       <div className="form-section">
         <label>
           <span className="form-label">What's the plan?</span>
@@ -99,7 +102,7 @@ export default function PlanForm({ initial: initialPlan, existingParticipantIds 
       <div className="form-section">
         <label>
           <span className="form-label">What are you looking for?</span>
-          <span className="form-hint">Say it however you'd say it to a friend — it gets turned into the filters below.</span>
+          <span className="form-hint">Say it however you'd say it to a friend. It gets turned into the filters below.</span>
           <input
             type="text"
             placeholder="good Indian food · quiet coffee shop · late night tacos"
@@ -108,7 +111,6 @@ export default function PlanForm({ initial: initialPlan, existingParticipantIds 
             onBlur={() => queryText.trim() && parse(queryText)}
           />
         </label>
-        {parsing && <p className="form-hint">Reading that…</p>}
         <Filters meta={meta} filters={filters} onChange={setFilters} />
         {summary && <p className="notice">Looking for: {summary}</p>}
       </div>
@@ -116,7 +118,7 @@ export default function PlanForm({ initial: initialPlan, existingParticipantIds 
       <div className="form-section">
         <label>
           <span className="form-label">When</span>
-          <span className="form-hint">Optional — transit times get checked for this time of day.</span>
+          <span className="form-hint">Optional. Travel times get checked for this time of day.</span>
           <input type="datetime-local" value={plannedFor} onChange={(e) => setPlannedFor(e.target.value)} />
         </label>
       </div>
@@ -125,7 +127,7 @@ export default function PlanForm({ initial: initialPlan, existingParticipantIds 
         <span className="form-label">{editing ? 'Invite more friends' : 'Who\'s coming?'}</span>
         {friends.length === 0 ? (
           <p className="form-hint">
-            No friends added yet — you can still create the plan and share its invite link afterward, no accounts needed.
+            No friends added yet. You can still create the plan and share its invite link afterward, no accounts needed.
           </p>
         ) : invitable.length === 0 ? (
           <p className="form-hint">Everyone you know is already on this plan.</p>

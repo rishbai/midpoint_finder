@@ -265,7 +265,7 @@ export async function rankVenuesForPeople(rawPeople, filters, departureTime) {
     const dropped = [filters.vibes?.length ? 'vibe' : null, filters.dish ? 'dish' : null].filter(Boolean).join('/');
     attempts.push({
       filters: { ...filters, vibes: [], dish: undefined },
-      note: `Nothing matched every filter exactly, so the ${dropped} filter was dropped — these still match everything else.`,
+      note: `Nothing matched every filter exactly, so the ${dropped} filter was dropped. These still match everything else.`,
     });
   }
   if (filters.maxPrice !== undefined && filters.maxPrice < 4) {
@@ -303,7 +303,7 @@ export async function rankVenuesForPeople(rawPeople, filters, departureTime) {
   // say so, rather than presenting a distant venue as a good "middle."
   const nearest = nearestDistance(candidates);
   if (!note && nearest > closeEnoughMeters) {
-    note = `The closest match is ${(nearest / 1000).toFixed(1)}km from the middle — this area may be thin on options.`;
+    note = `The closest match is ${(nearest / 1000).toFixed(1)}km from the middle. This area may be thin on options.`;
   }
   // Say when driving got switched on by itself, so nobody wonders why the
   // times suddenly assume a car. Only the people who drive are affected.
