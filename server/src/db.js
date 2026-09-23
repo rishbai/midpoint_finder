@@ -83,6 +83,9 @@ db.exec(`
     status      TEXT NOT NULL DEFAULT 'gathering' CHECK (status IN ('gathering', 'closed')),
     share_token TEXT,               -- opens the plan for anyone with the link (see services/plans.js)
     resolved_modes TEXT,            -- JSON array: what the last ranking actually priced
+    results_json  TEXT,             -- last computed results (see services/plans.js)
+    results_key   TEXT,             -- the inputs they were computed from; stale when it changes
+    results_at    TEXT,
     created_at  TEXT NOT NULL
   );
   CREATE INDEX IF NOT EXISTS idx_plans_host ON plans(host_id);
@@ -167,6 +170,12 @@ if (!planColumns.includes('share_token')) {
 // re-derive it and disagree. Written by computePlanResults.
 if (!planColumns.includes('resolved_modes')) {
   db.exec('ALTER TABLE plans ADD COLUMN resolved_modes TEXT');
+}
+// Results are the expensive part of a plan — a travel-time matrix per mode,
+// billed per person per venue — and "Refresh spots" re-ran all of it even
+// when nothing had changed. Cached against the inputs that produced them.
+for (const col of ['results_json', 'results_key', 'results_at']) {
+  if (!planColumns.includes(col)) db.exec(`ALTER TABLE plans ADD COLUMN ${col} TEXT`);
 }
 // Plans created before invite links existed don't have a token yet.
 const untokened = db.prepare('SELECT id FROM plans WHERE share_token IS NULL').all();

@@ -64,12 +64,35 @@ const setParticipantLocation = db.prepare(`
 `);
 const deletePlanStmt = db.prepare('DELETE FROM plans WHERE id = ? AND host_id = ?');
 const updatePlanStmt = db.prepare(`
-  UPDATE plans SET title = ?, query_text = ?, filters = ?, planned_for = ?, resolved_modes = NULL
+  UPDATE plans SET title = ?, query_text = ?, filters = ?, planned_for = ?,
+                   resolved_modes = NULL, results_key = NULL
   WHERE id = ? AND host_id = ?
 `);
 const deleteParticipant = db.prepare('DELETE FROM plan_participants WHERE plan_id = ? AND user_id = ?');
 const saveResolvedModes = db.prepare('UPDATE plans SET resolved_modes = ? WHERE id = ?');
-const clearResolvedModes = db.prepare('UPDATE plans SET resolved_modes = NULL WHERE id = ?');
+const saveResults = db.prepare(
+  'UPDATE plans SET results_json = ?, results_key = ?, results_at = ? WHERE id = ?'
+);
+
+// Everything a result depends on. If none of it moved, the answer can't have
+// moved either, so there's nothing to pay Google for a second time: who is
+// coming, where from, what's being looked for, and when.
+function resultsKey(plan, people) {
+  return JSON.stringify([
+    plan.filters,
+    plan.planned_for,
+    people
+      .map((p) => `${p.userId}:${p.lat.toFixed(5)},${p.lng.toFixed(5)}:${p.travelModes.join('+')}`)
+      .sort(),
+  ]);
+}
+
+// Long enough that a group poking at a plan over an evening pays once,
+// short enough that travel times still reflect roughly the right time of day.
+const RESULTS_TTL_MS = 60 * 60 * 1000;
+const clearResolvedModes = db.prepare(
+  'UPDATE plans SET resolved_modes = NULL, results_key = NULL WHERE id = ?'
+);
 
 const VALID_MODES = ['TRANSIT', 'WALK', 'DRIVE'];
 function parseResolvedModes(json) {
@@ -392,6 +415,19 @@ export async function computePlanResults(planId, userId) {
     name: p.name,
     travelModes: normalizeTravelModes(p.travel_modes),
   }));
+  const key = resultsKey(plan, people);
+  const fresh =
+    plan.results_key === key &&
+    plan.results_at &&
+    Date.now() - new Date(plan.results_at).getTime() < RESULTS_TTL_MS;
+  if (fresh && plan.results_json) {
+    try {
+      return { ...JSON.parse(plan.results_json), cached: true };
+    } catch {
+      // Unreadable cache is just a cache miss.
+    }
+  }
+
   const filters = JSON.parse(plan.filters);
   const { center, results, note, modesUsed } = await rankVenuesForPeople(people, filters, plan.planned_for);
   // Remember what got priced, so tapping into a venue shows directions in the
@@ -406,7 +442,9 @@ export async function computePlanResults(planId, userId) {
     venue: { ...r.venue, description: descriptions[r.venue.id] || null },
   }));
 
-  return { people, center, results: described, note };
+  const payload = { people, center, results: described, note };
+  saveResults.run(JSON.stringify(payload), key, new Date().toISOString(), planId);
+  return payload;
 }
 
 // Step-by-step directions for one venue, per participant — only fetched when

@@ -8,6 +8,7 @@ import { db } from '../db.js';
 import { searchNearby } from './google.js';
 import { CATEGORY_GROUPS, upsertVenue, toVenueRow, inUS } from './placesIngest.js';
 import { CATEGORY_TYPES, VENUE_STYLES } from '../lib/vocab.js';
+import { distanceMeters } from './search.js';
 import { tagVenues } from './tagging.js';
 
 const CELL_DEGREES = 0.01; // ~1.1km — one cell roughly covers one sweep's useful radius
@@ -33,6 +34,33 @@ const SPLIT_CALL_BUDGET = 7;
 // One circle over a dense neighborhood only ever returns its densest corner,
 // so the targeted sweep starts small and splits from there.
 const TARGETED_SWEEP_RADIUS = 1500;
+// Tagging is one model call per venue, paid while someone waits, so it goes
+// to the places most likely to be candidates: the right kind, nearest first.
+const TAG_BUDGET = 40;
+
+// The subset of a sweep's haul worth spending a model call on.
+function worthTagging(rows, { center, category, style }) {
+  const styleTypes = VENUE_STYLES[style];
+  const seen = new Set();
+  return rows
+    .filter((r) => {
+      if (!r.reviews || r.reviews === '[]') return false;
+      if (seen.has(r.id)) return false; // the same place can come back from several sweeps
+      seen.add(r.id);
+      if (styleTypes) {
+        let types = [];
+        try {
+          types = JSON.parse(r.types || '[]');
+        } catch {
+          return false;
+        }
+        return types.some((t) => styleTypes.includes(t));
+      }
+      return category ? r.category === category : true;
+    })
+    .sort((a, b) => distanceMeters(center, a) - distanceMeters(center, b))
+    .slice(0, TAG_BUDGET);
+}
 
 // Between Cary and Apex, a 900m sweep lands in trees: the restaurants are in
 // the two downtowns, 4km either side. Match the sweep to the area the search
@@ -64,9 +92,9 @@ function recentlyCovered(key) {
 // DISTANCE gives the bars people actually walk to. Asking only the default way
 // is why a Hell's Kitchen pub could be missing entirely while the index still
 // believed that block was covered.
-async function sweep(center, radius, includedTypes) {
+async function sweep(center, radius, includedTypes, rankings = ['POPULARITY', 'DISTANCE']) {
   const results = await Promise.all(
-    ['POPULARITY', 'DISTANCE'].map((rankPreference) =>
+    rankings.map((rankPreference) =>
       searchNearby({ lat: center.lat, lng: center.lng, radius, includedTypes, rankPreference })
     )
   );
@@ -90,11 +118,14 @@ async function sweep(center, radius, includedTypes) {
 // way the batch ingest does (scripts/ingest.js). Bounded by a call budget
 // rather than depth: this runs while someone waits for their plan, and the
 // point is a decent look around the middle, not a census of Manhattan.
-async function splitSweep(center, radius, includedTypes, budget) {
+async function splitSweep(center, radius, includedTypes, budget, depth = 0) {
   if (budget.calls >= budget.max) return [];
   budget.calls += 1;
 
-  const { rows, capped } = await sweep(center, radius, includedTypes);
+  // Only the first circle asks both ways. Once we're splitting we're already
+  // zooming in on a block, and the prominent places there came back in the
+  // parent's results — so the children only need the nearest ones.
+  const { rows, capped } = await sweep(center, radius, includedTypes, depth === 0 ? ['POPULARITY', 'DISTANCE'] : ['DISTANCE']);
   if (!capped || radius <= MIN_SPLIT_RADIUS) return rows;
 
   const offset = radius / 2;
@@ -108,7 +139,8 @@ async function splitSweep(center, radius, includedTypes, budget) {
         { lat: center.lat + sy * dLat, lng: center.lng + sx * dLng },
         radius * 0.71,
         includedTypes,
-        budget
+        budget,
+        depth + 1
       ))
     );
   }
@@ -183,9 +215,14 @@ export async function ensureCoverage(center, { cuisine, category, style, radius 
   // Awaited (not fire-and-forget): if the plan's filters include a vibe or
   // dish, the search that runs right after this needs those tags to already
   // exist, or these brand-new venues would wrongly look like they don't match.
-  const withReviews = inserted.filter((r) => r.reviews && r.reviews !== '[]');
-  if (withReviews.length) {
-    await tagVenues(withReviews).catch((err) => console.warn('Live-ingest tagging failed:', err.message));
+  //
+  // But only for places that could actually be shown. Tagging is a model call
+  // each, and a sweep brings back every category near the middle — asking for
+  // a pub was tagging nearly three hundred venues, most of them cafes and
+  // restaurants no bar search can ever return, while the person waited.
+  const toTag = worthTagging(inserted, { center, category, style });
+  if (toTag.length) {
+    await tagVenues(toTag).catch((err) => console.warn('Live-ingest tagging failed:', err.message));
   }
 
   return { fetched: inserted.length };

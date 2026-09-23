@@ -53,6 +53,20 @@ const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 20, standardHea
 app.use('/api/auth/signup', authLimiter);
 app.use('/api/auth/login', authLimiter);
 
+// The two endpoints that spend money on someone else's behalf: ranking a plan
+// buys a travel-time matrix per mode, and the anonymous meetup does the same
+// with no account behind it. Repeats are cached (see services/plans.js), so
+// this only bites on genuinely new searches — which is exactly what to cap.
+const searchLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 40,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'That is a lot of searching — give it a few minutes.' },
+});
+app.use('/api/meetup', searchLimiter);
+app.use(/^\/api\/plans\/[^/]+\/(results|routes)/, searchLimiter);
+
 app.use('/api', venuesRouter);
 app.use('/api', meetupRouter);
 app.use('/api', authRouter);
