@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { searchVenues, parseQuery } from '../api.js';
-import { summarizeFilters } from '../format.js';
-import Filters, { EMPTY_FILTERS } from './Filters.jsx';
+import FilterSheet, { EMPTY_FILTERS, FilterBar } from './Filters.jsx';
 import LoadingOverlay from './LoadingOverlay.jsx';
 import VenueCard from './VenueCard.jsx';
 
@@ -9,6 +8,7 @@ export default function SearchView({ meta, filters, onFilters }) {
   const [ask, setAsk] = useState('');
   const [parsing, setParsing] = useState(false);
   const [askError, setAskError] = useState('');
+  const [sheetOpen, setSheetOpen] = useState(false);
   const [results, setResults] = useState([]);
   const [status, setStatus] = useState('loading');
   const [error, setError] = useState('');
@@ -50,36 +50,38 @@ export default function SearchView({ meta, filters, onFilters }) {
     }
   }
 
-  const interpreted = summarizeFilters(filters);
-
   return (
     <section>
       {parsing && <LoadingOverlay label="Reading what you're looking for" />}
-      <form className="ask" onSubmit={submitAsk}>
+      {sheetOpen && <FilterSheet meta={meta} filters={filters} onChange={onFilters} onClose={() => setSheetOpen(false)} />}
+
+      <div className="page-head">
+        <h2>Find a spot</h2>
+      </div>
+
+      <form className="search-hero" onSubmit={submitAsk}>
         <input
           type="text"
-          placeholder='Or describe it: "good Indian food, open late"'
+          placeholder="What are you in the mood for?"
           value={ask}
           onChange={(e) => setAsk(e.target.value)}
+          aria-label="Describe what you're looking for"
         />
-        <button type="submit" className="primary" disabled={parsing}>
-          {parsing ? 'Thinking' : 'Ask'}
-        </button>
+        <button type="submit" className="primary" disabled={parsing || !ask.trim()}>Search</button>
       </form>
-      {askError && <p className="notice">{askError}</p>}
-
-      <Filters meta={meta} filters={filters} onChange={onFilters} />
+      <FilterBar filters={filters} onChange={onFilters} onOpen={() => setSheetOpen(true)} />
+      {askError && <p className="notice notice-error">{askError}</p>}
 
       {status === 'error' ? (
-        <p className="notice">Search failed: {error}</p>
+        <p className="notice notice-error">Search failed: {error}</p>
       ) : (
         <>
-          <p className="count">
-            {status === 'loading' ? 'Searching' : `${results.length} places`}
-            {interpreted && `, showing ${interpreted}`}
-          </p>
+          <p className="count">{status === 'loading' ? 'Searching' : `${results.length} places`}</p>
           {status === 'done' && results.length === 0 && (
-            <p className="notice">Nothing matches. Remove a filter or two.</p>
+            <div className="empty">
+              <p className="empty-title">Nothing matches</p>
+              <p className="muted">Try removing a filter or two.</p>
+            </div>
           )}
           <div className="results">
             {results.map((v) => <VenueCard key={v.id} venue={v} />)}
