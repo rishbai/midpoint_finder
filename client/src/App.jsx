@@ -11,6 +11,7 @@ import Friends from './components/Friends.jsx';
 import AuthPanel from './components/AuthPanel.jsx';
 import JoinPlan from './components/JoinPlan.jsx';
 import AddFriend from './components/AddFriend.jsx';
+import Privacy from './components/Privacy.jsx';
 
 function UpgradePrompt() {
   const { upgrade } = useAuth();
@@ -61,14 +62,37 @@ function UpgradePrompt() {
 }
 
 function AccountWidget() {
-  const { user, loading, logout } = useAuth();
+  const { user, loading, logout, deleteAccount } = useAuth();
+  const [open, setOpen] = useState(false);
   if (loading || !user) return null;
+
+  async function remove() {
+    const ok = window.confirm(
+      'Delete your account? Plans you host, your spots on other plans, and your friends list all go with it. This can\'t be undone.'
+    );
+    if (!ok) return;
+    try {
+      await deleteAccount();
+      navigate('/');
+    } catch (err) {
+      window.alert(err.message);
+    }
+  }
+
   return (
     <div className="account">
-      <Avatar index={1} label={initial(user.name)} />
-      <span className="account-name">{user.name}</span>
-      {user.isGuest && <UpgradePrompt />}
-      <button type="button" className="link" onClick={logout}>Log out</button>
+      <button type="button" className="account-btn" aria-expanded={open} onClick={() => setOpen(!open)}>
+        <Avatar index={1} label={initial(user.name)} />
+        <span className="account-name">{user.name}</span>
+      </button>
+      {open && (
+        <div className="account-menu" onClick={() => setOpen(false)}>
+          {user.isGuest && <UpgradePrompt />}
+          <button type="button" className="link" onClick={logout}>Log out</button>
+          <a className="link" href="/privacy" onClick={(e) => { e.preventDefault(); navigate('/privacy'); }}>Privacy</a>
+          <button type="button" className="link danger" onClick={remove}>Delete account</button>
+        </div>
+      )}
     </div>
   );
 }
@@ -85,6 +109,9 @@ function Welcome({ prompt }) {
         midpoint finds places that are a fair trip for all of you, whether that's by train, bus, car, or on foot.
       </p>
       <AuthPanel prompt={prompt} />
+      <p className="muted small">
+        <a href="/privacy" onClick={(e) => { e.preventDefault(); navigate('/privacy'); }}>Privacy</a>
+      </p>
     </div>
   );
 }
@@ -146,7 +173,9 @@ export default function App() {
 
   return (
     <AuthProvider>
-      {joinToken ? (
+      {path === '/privacy' ? (
+        <Privacy />
+      ) : joinToken ? (
         <JoinPlan token={joinToken} />
       ) : friendToken ? (
         <AddFriend token={friendToken} />

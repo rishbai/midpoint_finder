@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2732" height="2732" viewBox="0 0 2732 2732">
+  <rect width="2732" height="2732" fill="#ffffff"/>
+  <circle cx="1220" cy="1430" r="70" fill="#ff6b6b"/>
+  <circle cx="1512" cy="1302" r="70" fill="#4d96ff"/>
+  <line x1="1220" y1="1430" x2="1512" y2="1302" stroke="#14151a" stroke-opacity="0.25" stroke-width="20" stroke-linecap="round"/>
+  <circle cx="1366" cy="1366" r="120" fill="#14151a"/>
+  <circle cx="1366" cy="1366" r="52" fill="#ffffff"/>
+  <text x="1366" y="1720" text-anchor="middle" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="150" font-weight="800" fill="#14151a" letter-spacing="-4">midpoint</text>
+</svg>

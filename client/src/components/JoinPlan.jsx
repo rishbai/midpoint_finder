@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getPlanPreview, joinPlan } from '../api.js';
 import { useAuth } from '../auth.jsx';
+import { supabase, SUPABASE_ENABLED } from '../supabase.js';
 import LoadingOverlay from './LoadingOverlay.jsx';
 import TravelModes from './TravelModes.jsx';
 
@@ -30,6 +31,12 @@ export default function JoinPlan({ token }) {
     setBusy(true);
     setError('');
     try {
+      if (SUPABASE_ENABLED && !user) {
+        // An anonymous Supabase user: no email or password, upgradeable to a
+        // real account later from the app, same id throughout.
+        const { error } = await supabase.auth.signInAnonymously({ options: { data: { name: name.trim() } } });
+        if (error) throw new Error(error.message);
+      }
       const { plan } = await joinPlan(token, name.trim(), travelModes);
       // Full reload so the session (a new guest cookie, if any) is picked up
       // cleanly, landing straight on the plan just joined.

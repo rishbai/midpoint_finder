@@ -30,7 +30,11 @@ app.use((req, res, next) => {
 // (cookies) or the session simply won't work. Comma-separate for multiple
 // origins (e.g. a custom domain plus a Vercel preview URL).
 const allowedOrigins = (process.env.CLIENT_ORIGIN || '').split(',').map((s) => s.trim()).filter(Boolean);
-if (allowedOrigins.length) {
+// The native app (Capacitor) loads from its own scheme rather than a
+// website, so these are always welcome; a browser can't forge them.
+const NATIVE_ORIGINS = ['capacitor://localhost', 'ionic://localhost', 'http://localhost'];
+allowedOrigins.push(...NATIVE_ORIGINS);
+if (allowedOrigins.length > NATIVE_ORIGINS.length) {
   app.use(cors({
     origin: (origin, cb) => {
       if (!origin || allowedOrigins.includes(origin)) return cb(null, true);

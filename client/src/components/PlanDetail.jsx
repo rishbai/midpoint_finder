@@ -17,6 +17,7 @@ import {
 import { useAuth } from '../auth.jsx';
 import { modeWord, vehicleLabel, formatWhen, initial, travelModeSummary } from '../format.js';
 import { navigate } from '../router.js';
+import { currentPosition } from '../geo.js';
 import Avatar from './Avatar.jsx';
 import InviteLinkBox from './InviteLinkBox.jsx';
 import LoadingOverlay from './LoadingOverlay.jsx';
@@ -415,31 +416,12 @@ export default function PlanDetail({ id, editing, onBack }) {
     applyPlan((await respondToPlan(id, action)).plan);
   });
 
-  function shareGeolocation() {
-    if (!navigator.geolocation) {
-      setError("Your browser can't share location. Type an address instead.");
-      return;
-    }
-    setBusyLabel('Finding your location');
-    setError('');
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        try {
-          const { latitude: lat, longitude: lng } = pos.coords;
-          setBusyLabel('Saving your location');
-          applyPlan((await sharePlanLocation(id, { lat, lng })).plan);
-        } catch (err) {
-          setError(err.message);
-        } finally {
-          setBusyLabel('');
-        }
-      },
-      () => {
-        setError('Location sharing was blocked. Type an address instead.');
-        setBusyLabel('');
-      }
-    );
-  }
+  const shareGeolocation = () =>
+    run('Finding your location', async () => {
+      const { lat, lng } = await currentPosition();
+      setBusyLabel('Saving your location');
+      applyPlan((await sharePlanLocation(id, { lat, lng })).plan);
+    });
 
   const shareAddress = (e) => {
     e.preventDefault();

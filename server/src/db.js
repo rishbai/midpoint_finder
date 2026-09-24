@@ -49,6 +49,7 @@ db.exec(`
     name          TEXT NOT NULL,
     is_guest      INTEGER NOT NULL DEFAULT 0, -- joined via a plan's invite link, no real email/password
     friend_invite_token TEXT,          -- this user's personal "add me" link (see routes/friends.js)
+    supabase_id   TEXT,                -- Supabase Auth user id, once login moved there (see lib/auth.js)
     created_at    TEXT NOT NULL
   );
 
@@ -144,6 +145,10 @@ if (!userColumns.includes('is_guest')) {
 if (!userColumns.includes('friend_invite_token')) {
   db.exec('ALTER TABLE users ADD COLUMN friend_invite_token TEXT');
 }
+if (!userColumns.includes('supabase_id')) {
+  db.exec('ALTER TABLE users ADD COLUMN supabase_id TEXT');
+}
+db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_supabase_id ON users(supabase_id)');
 const untokenedUsers = db.prepare('SELECT id FROM users WHERE friend_invite_token IS NULL').all();
 if (untokenedUsers.length) {
   const setToken = db.prepare('UPDATE users SET friend_invite_token = ? WHERE id = ?');

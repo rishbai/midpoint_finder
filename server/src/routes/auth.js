@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import { Router } from 'express';
 import { db } from '../db.js';
 import { hashPassword, verifyPassword, signIn, signOut, requireAuth } from '../lib/auth.js';
+import { supabaseAdmin } from '../lib/supabaseAdmin.js';
 
 export const authRouter = Router();
 
@@ -61,6 +62,38 @@ authRouter.post('/auth/logout', (req, res) => {
 
 authRouter.get('/auth/me', (req, res) => {
   res.json({ user: req.user });
+});
+
+authRouter.patch('/auth/me', requireAuth, (req, res, next) => {
+  try {
+    const name = String(req.body?.name || '').trim();
+    if (!name) throw badRequest('Enter your name.');
+    db.prepare('UPDATE users SET name = ? WHERE id = ?').run(name, req.user.id);
+    res.json({ user: { ...req.user, name } });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Deleting your account takes everything with it: plans you host (and the
+// participations in them, by cascade), your spots on other people's plans,
+// friendships, sessions. If login lives in Supabase, the identity there goes
+// too, so the email can be used again. Apple requires this to exist in-app
+// for any app that lets people create an account.
+const findSupabaseId = db.prepare('SELECT supabase_id FROM users WHERE id = ?');
+authRouter.delete('/auth/me', requireAuth, async (req, res, next) => {
+  try {
+    const { supabase_id: supabaseId } = findSupabaseId.get(req.user.id) || {};
+    db.prepare('DELETE FROM users WHERE id = ?').run(req.user.id);
+    if (supabaseId && supabaseAdmin) {
+      const { error } = await supabaseAdmin.auth.admin.deleteUser(supabaseId);
+      if (error) console.warn('Supabase user deletion failed:', error.message);
+    }
+    signOut(req, res);
+    res.status(204).end();
+  } catch (err) {
+    next(err);
+  }
 });
 
 // A guest who joined via a plan's invite link can turn that same account into

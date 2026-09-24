@@ -1,10 +1,25 @@
-// Empty in dev (Vite proxies /api to the local server, same origin). Set
-// VITE_API_URL in production if the API is deployed on a different origin
-// than the frontend (e.g. frontend on Vercel, API on Railway) — see README.
-const API_BASE = import.meta.env.VITE_API_URL || '';
+import { Capacitor } from '@capacitor/core';
+import { supabase, SUPABASE_ENABLED } from './supabase.js';
 
-async function request(path, options) {
-  const res = await fetch(`${API_BASE}${path}`, { credentials: 'include', ...options });
+// Empty in dev (Vite proxies /api to the local server, same origin) and on
+// the website (Vercel proxies /api to the API, see vercel.json). The native
+// app has no proxy in front of it, so it needs the API's real address.
+const NATIVE = Capacitor.isNativePlatform();
+const API_BASE =
+  import.meta.env.VITE_API_URL || (NATIVE ? 'https://midpoint-api-production.up.railway.app' : '');
+
+// With Supabase login, every request carries the current access token; the
+// server verifies it and finds (or creates) the person behind it. Without
+// it, the cookie session does the same job.
+async function authHeaders() {
+  if (!SUPABASE_ENABLED) return {};
+  const { data } = await supabase.auth.getSession();
+  return data.session ? { Authorization: `Bearer ${data.session.access_token}` } : {};
+}
+
+async function request(path, options = {}) {
+  const headers = { ...(await authHeaders()), ...(options.headers || {}) };
+  const res = await fetch(`${API_BASE}${path}`, { credentials: 'include', ...options, headers });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
   return data;
@@ -42,6 +57,9 @@ export const parseQuery = (q) => postJson('/api/query', { q });
 
 // Auth
 export const getMe = () => request('/api/auth/me');
+export const updateProfile = (name) =>
+  request('/api/auth/me', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
+export const deleteAccount = () => request('/api/auth/me', { method: 'DELETE' });
 export const signup = (body) => postJson('/api/auth/signup', body);
 export const login = (body) => postJson('/api/auth/login', body);
 export const logout = () => request('/api/auth/logout', { method: 'POST' });

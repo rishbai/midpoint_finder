@@ -704,3 +704,31 @@ legend { font-size: 0.875rem; font-weight: 700; margin-bottom: 0.4rem; padding: 
   .venue-link { margin-left: 0; }
   .travel-popover { position: fixed; left: 1rem; right: 1rem; top: auto; bottom: 5rem; min-width: 0; max-width: none; }
 }
+
+/* Account menu in the header: name opens a small list of the rare actions. */
+.account { position: relative; }
+.account-btn { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0; border: 0; background: none; cursor: pointer; }
+.account-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.5rem);
+  z-index: 30;
+  display: grid;
+  gap: 0.6rem;
+  min-width: 11rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--rule);
+  border-radius: 14px;
+  background: var(--white);
+  box-shadow: 0 8px 28px rgb(0 0 0 / 12%);
+  text-align: left;
+}
+.account-menu .link { text-decoration: none; text-align: left; }
+.account-menu .upgrade-form { flex-direction: column; align-items: stretch; }
+.account-menu .upgrade-form input { width: 100%; }
+
+/* Privacy page: plain reading. */
+.prose { max-width: 40rem; margin: 0 auto; padding: 1.5rem 1.5rem 4rem; }
+.prose h2 { font-size: 1.1rem; margin: 1.5rem 0 0.4rem; }
+.prose p, .prose li { color: #3a3b42; }
+@media (max-width: 640px) { .account-menu { position: fixed; left: 1rem; right: 1rem; top: auto; bottom: 5rem; } }
