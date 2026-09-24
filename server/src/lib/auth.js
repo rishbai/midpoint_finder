@@ -118,17 +118,16 @@ const insertSupabaseUser = db.prepare(`
   VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 `);
 const linkSupabaseId = db.prepare('UPDATE users SET supabase_id = ? WHERE id = ?');
-const promoteUser = db.prepare('UPDATE users SET is_guest = 0, email = ?, name = ? WHERE id = ?');
 
 // The person behind a verified token, as a users row, created on first sight.
-// An anonymous Supabase user (someone who joined by invite link) is a guest
-// here; when they later add an email and password, their next token says so
-// and the row is promoted in place, keeping their plans.
+// Every account here is a real, confirmed email: an anonymous Supabase token
+// (a project setting that's meant to stay off) is treated as signed out
+// rather than trusted, so a misconfiguration can't quietly let people in.
 function userForClaims(claims) {
+  if (claims.is_anonymous === true || !claims.email) return null;
   const supabaseId = claims.sub;
-  const anonymous = claims.is_anonymous === true;
-  const email = claims.email || null;
-  const name = String(claims.user_metadata?.name || '').trim() || (email ? email.split('@')[0] : 'Guest');
+  const email = claims.email;
+  const name = String(claims.user_metadata?.name || '').trim() || email.split('@')[0];
 
   let row = findBySupabaseId.get(supabaseId);
 
@@ -146,17 +145,14 @@ function userForClaims(claims) {
     const id = crypto.randomUUID();
     insertSupabaseUser.run(
       id,
-      email || `guest-${id}@guest.midpoint.local`,
+      email,
       crypto.randomBytes(32).toString('hex'), // never used; the password lives in Supabase
       name,
-      anonymous ? 1 : 0,
+      0,
       crypto.randomBytes(8).toString('hex'),
       supabaseId,
       new Date().toISOString()
     );
-    row = findBySupabaseId.get(supabaseId);
-  } else if (row.is_guest && !anonymous && email) {
-    promoteUser.run(email, name, row.id);
     row = findBySupabaseId.get(supabaseId);
   }
   return publicUser(row);

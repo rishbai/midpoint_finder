@@ -109,5 +109,4 @@ export const getPlanVenueRoutes = (id, venueId) => request(`/api/plans/${id}/rou
 
 // Invite links (no account needed to preview or join)
 export const getPlanPreview = (token) => request(`/api/plans/join/${token}`);
-export const joinPlan = (token, name, travelModes) =>
-  postJson(`/api/plans/join/${token}`, { name, travelModes });
+export const joinPlan = (token, travelModes) => postJson(`/api/plans/join/${token}`, { travelModes });

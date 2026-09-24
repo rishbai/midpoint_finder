@@ -12,9 +12,9 @@ export default function Privacy() {
 
         <h2>What we store</h2>
         <ul>
-          <li><strong>Your account:</strong> name, email, and a login handled by Supabase. If you join a plan from an invite link without signing up, only the name you typed is stored.</li>
+          <li><strong>Your account:</strong> name, email, and a login handled by Supabase. Every account has a confirmed email address.</li>
           <li><strong>Your location, only when you share it:</strong> the point you choose for a plan, either from your device or an address you type. It is used to find a fair middle for that plan and is visible to the other people on that plan. It is not tracked in the background and is not collected unless you tap to share it.</li>
-          <li><strong>Plans:</strong> the title, what you said you were looking for, when, and who is on it.</li>
+          <li><strong>Plans:</strong> the title, what you said you were looking for, when, and who is on it. A host can add someone by name and address who has no account; only that name and starting point are stored for them.</li>
           <li><strong>Friends:</strong> who you have added or been added by.</li>
         </ul>
 

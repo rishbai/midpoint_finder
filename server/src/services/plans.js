@@ -153,53 +153,30 @@ export function getPlanPreviewByToken(token) {
   return { title: plan.title, hostName: host?.name || 'Someone', participantCount };
 }
 
-// Opening a plan's invite link: a signed-in visitor (real account or an
-// existing guest) is added directly; an anonymous visitor gives just a name
-// and gets a lightweight guest account created on the spot (see lib/auth.js
-// signIn — same session mechanism as a real login, so every other plan
-// endpoint works for them unchanged; no password, no email shown anywhere).
-export function joinPlanByToken(token, { userId, name, travelModes }) {
+// Opening a plan's invite link adds the signed-in person to the plan. There
+// is no way in without an account: everyone on a plan has a real, confirmed
+// email, and the only exception is someone the host adds by name and
+// address, who never logs in at all (see addPersonByAddress).
+export function joinPlanByToken(token, { userId, travelModes }) {
   const plan = getPlanByToken.get(token);
   if (!plan) throw notFound("This invite link isn't valid.");
-
-  let finalUserId = userId;
-  let isNewGuest = false;
-  if (!finalUserId) {
-    const cleanName = String(name || '').trim();
-    if (!cleanName) throw badRequest('Enter your name to join.');
-    finalUserId = crypto.randomUUID();
-    const placeholderEmail = `guest-${finalUserId}@guest.midpoint.local`;
-    const placeholderHash = crypto.randomBytes(32).toString('hex'); // never given out; can't be used to log in
-    insertGuestUser.run(
-      finalUserId,
-      placeholderEmail,
-      placeholderHash,
-      cleanName,
-      crypto.randomBytes(8).toString('hex'),
-      new Date().toISOString()
-    );
-    isNewGuest = true;
-  }
+  if (!userId) throw forbidden('Sign in to join this plan.');
 
   const existingCount = db.prepare('SELECT COUNT(*) c FROM plan_participants WHERE plan_id = ?').get(plan.id).c;
-  const alreadyIn = getParticipant.get(plan.id, finalUserId);
+  const alreadyIn = getParticipant.get(plan.id, userId);
   if (!alreadyIn) {
     if (existingCount >= MAX_PEOPLE) throw badRequest(`This plan already has ${MAX_PEOPLE} people.`);
-    insertParticipant.run(plan.id, finalUserId, 'joined');
+    insertParticipant.run(plan.id, userId, 'joined');
   }
   // The answer given on the way in is about this trip, so it's stored on the
   // participation; joining a different plan later asks again, because the
   // answer really can be different there. An empty answer is no answer: it
   // stays unset, so the plan keeps asking rather than quietly assuming.
   if (Array.isArray(travelModes) && travelModes.length) {
-    setParticipantTravelModesStmt.run(
-      JSON.stringify(normalizeTravelModes(travelModes)),
-      plan.id,
-      finalUserId
-    );
+    setParticipantTravelModesStmt.run(JSON.stringify(normalizeTravelModes(travelModes)), plan.id, userId);
   }
 
-  return { userId: finalUserId, isNewGuest, plan: getPlan(plan.id, finalUserId) };
+  return { plan: getPlan(plan.id, userId) };
 }
 
 export function listPlansForUser(userId) {

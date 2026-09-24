@@ -57,13 +57,19 @@ export function AuthProvider({ children }) {
   );
 
   const signup = useCallback(
-    async (name, email, password) => {
+    async (name, email, password, { redirectTo } = {}) => {
       if (!SUPABASE_ENABLED) {
         const { user } = await apiSignup({ name, email, password });
         setUser(user);
         return;
       }
-      const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { name } } });
+      // With email confirmation on, the link in the email opens redirectTo
+      // (the invite page, when that's where they started) already signed in.
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { data: { name }, emailRedirectTo: redirectTo },
+      });
       if (error) throw new Error(error.message);
       // With email confirmation on in Supabase there's no session yet.
       if (!data.session) throw new Error('Check your email to confirm your account, then sign in.');

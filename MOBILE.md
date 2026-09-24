@@ -11,12 +11,15 @@ your accounts or your Mac; the rest is done.
 ## 1. Supabase project (you, ~10 minutes, free)
 
 1. Create a project at supabase.com. Any region; "Free" plan.
-2. **Authentication → Providers → Email**: turn **Confirm email OFF** for now.
-   Two flows depend on it: someone who joined by invite link adding an email
-   and password to keep their account, and a straightforward sign-up. You can
-   turn it back on later once you're happy with the flows.
-3. **Authentication → Sign In / Providers**: enable **Anonymous sign-ins**.
-   That's how an invite-link visitor gets an identity without signing up.
+2. **Authentication → Providers → Email**: leave **Confirm email ON**. That's
+   what makes sign-up addresses real: Supabase emails a link, and the person
+   can sign in once they've clicked it. The app already says "check your
+   email" after sign-up. (Off would let anyone sign up as fake@fake.com.)
+3. **Authentication → URL Configuration**: set the Site URL to
+   `https://midpointfinderapp.vercel.app` and add
+   `https://midpointfinderapp.vercel.app/**` under Redirect URLs. A sign-up
+   started from an invite link confirms back to that link.
+   Leave **Anonymous sign-ins** off (the default); nobody joins without an account.
 4. **Project Settings → API**, copy three values:
    - Project URL
    - `anon` `public` key
@@ -36,8 +39,10 @@ Then move existing accounts over so nobody has to sign up again. From
     node scripts/migrate-users.js --dry
     node scripts/migrate-users.js
 
-Passwords carry over as-is (the hashes are compatible). Guests and people
-added by address have no login and are left alone.
+Passwords carry over as-is (the hashes are compatible). People added by
+address have no login and are left alone. Anyone who joined a plan from a
+link without an account (the old guest flow) isn't moved either: that path
+no longer exists, so they'll sign up properly the next time.
 
 ## 2. Xcode (you, free, ~10 GB)
 
@@ -89,8 +94,8 @@ policy, a native location prompt, and real functionality beyond a website.
 
 - `server/src/lib/auth.js`: accepts a Supabase bearer token as well as the
   old session cookie. A person is created in `users` on first sight and linked
-  by `supabase_id`; an anonymous Supabase user is a guest, promoted in place
-  when they add an email.
+  by `supabase_id`. Every account is a real, confirmed email; joining a plan
+  from a link now requires signing in first.
 - `server/src/routes/auth.js`: `DELETE /api/auth/me` deletes the account
   everywhere (Apple requires this in-app), `PATCH /api/auth/me` updates the name.
 - `client/src/supabase.js`, `client/src/auth.jsx`, `client/src/api.js`: one

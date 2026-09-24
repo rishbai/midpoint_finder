@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../auth.jsx';
 
-export default function AuthPanel({ prompt }) {
+export default function AuthPanel({ prompt, redirectTo }) {
   const { login, signup } = useAuth();
   const [mode, setMode] = useState('login');
   const [form, setForm] = useState({ name: '', email: '', password: '' });
@@ -16,7 +16,7 @@ export default function AuthPanel({ prompt }) {
     setError('');
     try {
       if (mode === 'login') await login(form.email, form.password);
-      else await signup(form.name, form.email, form.password);
+      else await signup(form.name, form.email, form.password, { redirectTo });
     } catch (err) {
       setError(err.message);
     } finally {

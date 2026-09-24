@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { requireAuth, signIn } from '../lib/auth.js';
+import { requireAuth } from '../lib/auth.js';
 import {
   createPlan,
   listPlansForUser,
@@ -56,17 +56,15 @@ plansRouter.get('/plans/join/:token', (req, res, next) => {
   }
 });
 
-plansRouter.post('/plans/join/:token', (req, res, next) => {
+plansRouter.post('/plans/join/:token', requireAuth, (req, res, next) => {
   try {
-    const { userId, isNewGuest, plan } = joinPlanByToken(req.params.token, {
-      userId: req.user?.id,
-      name: req.body?.name,
-      // Someone joining by link says how they get around at the same time as
-      // their name — it's the only moment we have their attention, and their
-      // answer is what makes the "fair middle" fair for them.
+    const { plan } = joinPlanByToken(req.params.token, {
+      userId: req.user.id,
+      // Someone joining by link says how they get around as they arrive: it's
+      // the one moment we have their attention, and their answer is what
+      // makes the "fair middle" fair for them.
       travelModes: req.body?.travelModes,
     });
-    if (isNewGuest) signIn(res, userId);
     res.json({ plan });
   } catch (err) {
     next(err);

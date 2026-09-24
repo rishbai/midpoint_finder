@@ -1,17 +1,16 @@
 import { useEffect, useState } from 'react';
 import { getPlanPreview, joinPlan } from '../api.js';
 import { useAuth } from '../auth.jsx';
-import { supabase, SUPABASE_ENABLED } from '../supabase.js';
+import AuthPanel from './AuthPanel.jsx';
 import LoadingOverlay from './LoadingOverlay.jsx';
 import TravelModes from './TravelModes.jsx';
 
-// The page a plan's invite link opens to. No login required: a signed-in
-// visitor (real account or an existing guest) joins with one click; an
-// anonymous visitor just gives a name and gets a lightweight guest account.
+// The page a plan's invite link opens to. Joining needs a real account, so
+// a visitor who isn't signed in sees the plan's name and a sign-in / sign-up
+// form first; once they're in, they say how they'll get there and join.
 export default function JoinPlan({ token }) {
   const { user, loading: authLoading } = useAuth();
   const [preview, setPreview] = useState(null);
-  const [name, setName] = useState('');
   // Asked here because this is the one moment we have a new person's
   // attention, and their answer is what makes their travel times honest.
   // Starts empty on purpose: picking how you'll get there is a decision.
@@ -31,15 +30,7 @@ export default function JoinPlan({ token }) {
     setBusy(true);
     setError('');
     try {
-      if (SUPABASE_ENABLED && !user) {
-        // An anonymous Supabase user: no email or password, upgradeable to a
-        // real account later from the app, same id throughout.
-        const { error } = await supabase.auth.signInAnonymously({ options: { data: { name: name.trim() } } });
-        if (error) throw new Error(error.message);
-      }
-      const { plan } = await joinPlan(token, name.trim(), travelModes);
-      // Full reload so the session (a new guest cookie, if any) is picked up
-      // cleanly, landing straight on the plan just joined.
+      const { plan } = await joinPlan(token, travelModes);
       window.location.href = `/plans/${plan.id}`;
     } catch (err) {
       setError(err.message);
@@ -66,8 +57,6 @@ export default function JoinPlan({ token }) {
     );
   }
 
-  const ready = travelModes.length > 0 && (user || name.trim());
-
   return (
     <div className="app">
       {busy && <LoadingOverlay label="Joining the plan" />}
@@ -79,34 +68,28 @@ export default function JoinPlan({ token }) {
           Hosted by {preview.hostName} · {preview.participantCount} {preview.participantCount === 1 ? 'person' : 'people'} so far
         </p>
 
-        <form onSubmit={submit}>
-          {!user && (
-            <label>
-              Your name
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="What should we call you?"
-                required
-                autoFocus
-              />
-            </label>
-          )}
-          <div className="form-section">
-            <span className="form-label">How will you get there?</span>
-            <span className="form-hint">
-              Pick everything you'd be happy to take. The spot that gets chosen is a fair trip for you by
-              these, and it only applies to this plan.
-            </span>
-            <TravelModes value={travelModes} onChange={setTravelModes} />
-            {!travelModes.length && <span className="form-hint">Choose at least one to join.</span>}
-          </div>
-          {error && <p className="notice">{error}</p>}
-          <button type="submit" className="primary" disabled={busy || !ready}>
-            {user ? `Join as ${user.name}` : 'Join'}
-          </button>
-        </form>
+        {!user ? (
+          <>
+            <p className="muted">Sign in, or make an account, to join. You'll come straight back here.</p>
+            <AuthPanel redirectTo={window.location.href} />
+          </>
+        ) : (
+          <form onSubmit={submit}>
+            <div className="form-section">
+              <span className="form-label">How will you get there?</span>
+              <span className="form-hint">
+                Pick everything you'd be happy to take. The spot that gets chosen is a fair trip for you by
+                these, and it only applies to this plan.
+              </span>
+              <TravelModes value={travelModes} onChange={setTravelModes} />
+              {!travelModes.length && <span className="form-hint">Choose at least one to join.</span>}
+            </div>
+            {error && <p className="notice notice-error">{error}</p>}
+            <button type="submit" className="primary" disabled={busy || !travelModes.length}>
+              Join as {user.name}
+            </button>
+          </form>
+        )}
       </div>
     </div>
   );
