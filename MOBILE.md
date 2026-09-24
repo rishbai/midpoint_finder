@@ -33,16 +33,12 @@ your accounts or your Mac; the rest is done.
    - `client/.env.local` (for your native build): the same two `VITE_` values,
      plus `VITE_API_URL=https://midpoint-api-production.up.railway.app`.
 
-Then move existing accounts over so nobody has to sign up again. From
-`server/`, with the Railway env available (`railway ssh`):
-
-    node scripts/migrate-users.js --dry
-    node scripts/migrate-users.js
-
-Passwords carry over as-is (the hashes are compatible). People added by
-address have no login and are left alone. Anyone who joined a plan from a
-link without an account (the old guest flow) isn't moved either: that path
-no longer exists, so they'll sign up properly the next time.
+Existing accounts are not moved over. The old login never checked emails,
+so many of them are made-up addresses. Instead, everyone signs up again
+through Supabase: someone who uses the same real address as their old
+account and confirms it gets that account back, plans and all. Old accounts
+under addresses nobody can confirm just sit unused. (`scripts/migrate-users.js`
+exists but was deliberately not run.)
 
 ## 2. Xcode (you, free, ~10 GB)
 

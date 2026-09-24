@@ -732,3 +732,10 @@ legend { font-size: 0.875rem; font-weight: 700; margin-bottom: 0.4rem; padding: 
 .prose h2 { font-size: 1.1rem; margin: 1.5rem 0 0.4rem; }
 .prose p, .prose li { color: #3a3b42; }
 @media (max-width: 640px) { .account-menu { position: fixed; left: 1rem; right: 1rem; top: auto; bottom: 5rem; } }
+
+/* iPhones zoom the page in when a field's text is under 16px, and the app
+   then sits zoomed and cut off. Touch screens get 16px fields. */
+@media (pointer: coarse) {
+  input, select, textarea, .upgrade-form input, .invite-link-row input { font-size: 1rem; }
+  .input-lg { font-size: 1.2rem; }
+}

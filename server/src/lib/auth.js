@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import bcrypt from 'bcryptjs';
-import { createRemoteJWKSet, jwtVerify } from 'jose';
+import { createRemoteJWKSet, decodeProtectedHeader, jwtVerify } from 'jose';
 import { db } from '../db.js';
 
 const SESSION_DAYS = 30;
@@ -93,19 +93,24 @@ export function signOut(req, res) {
 //
 // Env: SUPABASE_URL always. Newer projects sign tokens with a key pair and
 // publish the public half at /auth/v1/.well-known/jwks.json; older ones use
-// a shared secret, set as SUPABASE_JWT_SECRET. Either works.
+// a shared secret, set as SUPABASE_JWT_SECRET. Each token says which it is.
 
-const SUPABASE_URL = (process.env.SUPABASE_URL || '').replace(/\/$/, '');
-const SUPABASE_JWT_SECRET = process.env.SUPABASE_JWT_SECRET || '';
+// Pasted into a dashboard, values pick up stray spaces or quotes; any of
+// those would make every token fail the issuer check.
+const envValue = (name) => (process.env[name] || '').trim().replace(/^["']|["']$/g, '').trim();
+const SUPABASE_URL = envValue('SUPABASE_URL').replace(/\/+$/, '');
+const SUPABASE_JWT_SECRET = envValue('SUPABASE_JWT_SECRET');
 export const SUPABASE_ENABLED = Boolean(SUPABASE_URL);
+console.log(SUPABASE_ENABLED ? `Supabase login on (${SUPABASE_URL})` : 'Supabase login off: SUPABASE_URL is not set');
 
-const jwks = SUPABASE_ENABLED && !SUPABASE_JWT_SECRET
+const jwks = SUPABASE_ENABLED
   ? createRemoteJWKSet(new URL(`${SUPABASE_URL}/auth/v1/.well-known/jwks.json`))
   : null;
 
 async function verifySupabaseToken(token) {
   const options = { issuer: `${SUPABASE_URL}/auth/v1`, audience: 'authenticated' };
-  const { payload } = SUPABASE_JWT_SECRET
+  const { alg } = decodeProtectedHeader(token);
+  const { payload } = alg === 'HS256' && SUPABASE_JWT_SECRET
     ? await jwtVerify(token, new TextEncoder().encode(SUPABASE_JWT_SECRET), options)
     : await jwtVerify(token, jwks, options);
   return payload;
@@ -168,8 +173,11 @@ export async function attachUser(req, res, next) {
     if (token) {
       try {
         req.user = userForClaims(await verifySupabaseToken(token));
-      } catch {
-        req.user = null; // expired or forged: treated as signed out
+      } catch (err) {
+        // Expired or forged: treated as signed out. Logged because a
+        // misconfigured SUPABASE_URL looks exactly like this for everyone.
+        if (err?.code !== 'ERR_JWT_EXPIRED') console.warn('Supabase token rejected:', err?.code || '', err?.message);
+        req.user = null;
       }
     }
   }
